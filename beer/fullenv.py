@@ -364,7 +364,7 @@ def train_dqn(env, agent: DQNAgent, num_episodes=1000, max_t=100, eps_start=1.0,
     """
     scores = []  # 每个episode的总奖励
     eps = eps_start  # 初始epsilon值
-    
+    best_val_score = -1e9; idx = 0
     for i_episode in range(1, num_episodes+1):
         state = env.reset()
         score = 0
@@ -425,6 +425,7 @@ def train_dqn(env, agent: DQNAgent, num_episodes=1000, max_t=100, eps_start=1.0,
                 break
 
     # 训练结束后保存最终模型
+    print(f"Best res {best_val_score} at step {idx}")
     agent.save(f'models/dqn_agent_firm_{agent.firm_id}_final.pth')
     
     return scores

@@ -93,8 +93,7 @@ class Env:
 
         # 更新库存
         for i in range(self.num_firms):
-            self.inventory[i] = self.inventory[i] - self.satisfied_demand[i] + self.orders[i]
-            # (self.satisfied_demand[i+1] if i+1<self.num_firms else self.orders[i])
+            self.inventory[i] = self.inventory[i] - self.satisfied_demand[i] + (self.satisfied_demand[i+1] if i+1<self.num_firms else self.orders[i])
         
         # 计算每个企业的奖励: p_i * d_{it} - p_{i+1} * q_{it} - h * I_{it}
         rewards = np.zeros((self.num_firms, 1))
@@ -117,6 +116,13 @@ class Env:
             self.done = True
         
         return self._get_observation(), rewards, self.done
+
+    def get_action(self, firm_id):
+        cur_vol = self.inventory[firm_id]
+        avg_order = 10
+        target_vol = avg_order * 2
+        return max(min(20, target_vol-(cur_vol-avg_order)), 1)
+    
 
 # 定义Q网络模型
 class QNetwork(nn.Module):
@@ -344,8 +350,8 @@ class DQNAgent:
             print(f"从 {filename} 加载了模型")
             return True
         raise ValueError(f"{filename} not exist !")
-
-def train_dqn(env, agent, num_episodes=1000, max_t=100, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
+    
+def train_dqn(env, agent: DQNAgent, num_episodes=1000, max_t=100, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
     """
     训练DQN智能体
     
@@ -371,12 +377,13 @@ def train_dqn(env, agent, num_episodes=1000, max_t=100, eps_start=1.0, eps_end=0
             for firm_id in range(env.num_firms):
                 if firm_id == agent.firm_id:
                     # 使用智能体策略
-                    firm_state = state[firm_id].reshape(1, -1)
+                    # firm_state = state[firm_id].reshape(1, -1)
+                    firm_state = state
                     action = agent.act(firm_state, eps)
                     actions[firm_id] = action
                 else:
                     # 对其他企业采取随机策略
-                    actions[firm_id] = np.random.randint(1, 21)
+                    actions[firm_id] = env.get_action(firm_id) # np.random.randint(1, 21)
             
             # 执行动作
             next_state, rewards, done = env.step(actions)
@@ -385,7 +392,8 @@ def train_dqn(env, agent, num_episodes=1000, max_t=100, eps_start=1.0, eps_end=0
             reward = rewards[agent.firm_id][0]
             
             # 保存经验并学习
-            agent.step(state[agent.firm_id].reshape(1, -1), actions[agent.firm_id], reward, next_state[agent.firm_id].reshape(1, -1), done)
+            # agent.step(state[agent.firm_id].reshape(1, -1), actions[agent.firm_id], reward, next_state[agent.firm_id].reshape(1, -1), done)
+            agent.step(state.reshape(1, -1), actions[agent.firm_id], reward, next_state, done)
             
             # 更新状态和奖励
             state = next_state
@@ -417,7 +425,6 @@ def train_dqn(env, agent, num_episodes=1000, max_t=100, eps_start=1.0, eps_end=0
             elif i_episode >= idx + 2000: # early stop
                 print(f"Early stop at step {i_episode} !")
                 break
-            
 
     # 训练结束后保存最终模型
     print(f"Best res {best_val_score} at step {idx}")
@@ -454,12 +461,13 @@ def test_agent(env, agent, num_episodes=10):
             for firm_id in range(env.num_firms):
                 if firm_id == agent.firm_id:
                     # 使用智能体策略，不使用探索
-                    firm_state = state[firm_id].reshape(1, -1)
+                    # firm_state = state[firm_id].reshape(1, -1)
+                    firm_state = state
                     action = agent.act(firm_state, epsilon=0.0)
                     actions[firm_id] = action
                 else:
                     # 对其他企业采取随机策略
-                    actions[firm_id] = np.random.randint(1, 21)
+                    actions[firm_id] = env.get_action(firm_id) # np.random.randint(1, 21)
             
             # 执行动作
             next_state, rewards, done = env.step(actions)
@@ -554,7 +562,7 @@ def plot_test_results(scores, inventory_history, orders_history, demand_history,
     axs[1, 0].set_xlabel('时间步')
     axs[1, 0].set_ylabel('数量')
     axs[1, 0].legend()
-
+    
     print(f"satisfied demand rate: {np.mean(avg_satisfied_demand)}/{np.mean(avg_demand)} = {np.mean(avg_satisfied_demand)/np.mean(avg_demand)}")
 
     # 奖励柱状图
@@ -592,12 +600,11 @@ if __name__ == "__main__":
     state_size = 3  # 每个企业的状态维度：订单、满足的需求和库存
     action_size = 20  # 假设最大订单量为20
     
-    agent = DQNAgent(state_size=state_size, action_size=action_size, firm_id=firm_id, max_order=action_size)
+    agent = DQNAgent(state_size=state_size*num_firms, action_size=action_size, firm_id=firm_id, max_order=action_size)
     
-    # scores = train_dqn(env, agent, num_episodes=10000, max_t=max_steps, eps_start=1.0, eps_end=0.10, eps_decay=0.995)
+    # scores = train_dqn(env, agent, num_episodes=10000, max_t=max_steps, eps_start=1.0, eps_end=0.05, eps_decay=0.995)
     # plot_training_results(scores)
-    weight_path = f'D:\Pku\classes\Multi-agent\projects\\beer\experiments\\vanilla_DQN\eps_0.10\\6000_453.46.pth'
-    # 0.01,4000_442.74.pth  0.08,7000_446.56.pth  0.10,6000_453.46.pth  0.12,4000_438.19.pth  0.15,2000_432.25.pth
+    weight_path = f'D:\Pku\classes\Multi-agent\projects\\beer\experiments\\new_env\\full\\7000_308.03.pth'
     agent.load(weight_path)
     
     # 测试训练好的智能体c
