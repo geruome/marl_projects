@@ -17,9 +17,6 @@ gamma为1, Value iteration:
 
 gamma < 1: 收敛性很棒 !!!
 
-
-why gamma<1 大小不收敛 ???
-
 非就地的best_act单调不降看起来很正常。
 
 10000次test:
