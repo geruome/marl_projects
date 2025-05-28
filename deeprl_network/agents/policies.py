@@ -56,7 +56,7 @@ class Policy(nn.Module):
             h = torch.cat([h, na_sparse], dim=1)
         return self.critic_head(h).squeeze()
 
-    def _run_loss(self, actor_dist, e_coef, v_coef, vs, As, Rs, Advs):
+    def _run_loss(self, actor_dist, e_coef, v_coef, vs, As, Rs, Advs): # here
         log_probs = actor_dist.log_prob(As)
         policy_loss = -(log_probs * Advs).mean()
         entropy_loss = -(actor_dist.entropy()).mean() * e_coef
@@ -95,8 +95,8 @@ class LstmPolicy(Policy):
         hs, new_states = run_rnn(self.lstm_layer, xs, dones, self.states_bw)
         # backward grad is limited to the minibatch
         self.states_bw = new_states.detach()
-        # actor_dist = torch.distributions.categorical.Categorical(logits=F.log_softmax(self.actor_head(hs), dim=1)) # 旧版本写法 ??
-        actor_dist = torch.distributions.categorical.Categorical(logits=self.actor_head(hs))
+        actor_dist = torch.distributions.categorical.Categorical(logits=F.log_softmax(self.actor_head(hs), dim=1)) # 旧版本写法 ?? 不影响结果。因为log_softmax(log_softmax(logits)) = log_softmax(logits)
+        # actor_dist = torch.distributions.categorical.Categorical(logits=self.actor_head(hs))
         vs = self._run_critic_head(hs, nactions)
         self.policy_loss, self.value_loss, self.entropy_loss = \
             self._run_loss(actor_dist, e_coef, v_coef, vs,
@@ -245,9 +245,9 @@ class NCMultiAgentPolicy(Policy):
             p_i = torch.cat(p_i_ls).unsqueeze(0)
             nx_i = torch.cat(nx_i_ls).unsqueeze(0)
             x_i = x[i].narrow(0, 0, self.n_s_ls[i]).unsqueeze(0)
-        s_i = [F.relu(self.fc_x_layers[i](torch.cat([x_i, nx_i], dim=1))),
-               F.relu(self.fc_p_layers[i](p_i)),
-               F.relu(self.fc_m_layers[i](m_i))]
+        s_i = [F.relu(self.fc_x_layers[i](torch.cat([x_i, nx_i], dim=1))), # 自身观测 + 邻居观测
+               F.relu(self.fc_p_layers[i](p_i)), # 邻居指纹
+               F.relu(self.fc_m_layers[i](m_i))] # 邻居隐藏状态（消息）
         return torch.cat(s_i, dim=1)
 
     def _get_neighbor_dim(self, i_agent):
@@ -323,11 +323,12 @@ class NCMultiAgentPolicy(Policy):
             if detach:
                 p_i = F.softmax(self.actor_heads[i](hs[i]), dim=1).squeeze().detach().numpy()
             else:
-                p_i = F.log_softmax(self.actor_heads[i](hs[i]), dim=1)
+                p_i = F.log_softmax(self.actor_heads[i](hs[i]), dim=1) # ??
             ps.append(p_i)
         return ps
 
     def _run_comm_layers(self, obs, dones, fps, states):
+        # (B,25,12) (B) (B,25,5) (25,128)
         obs = batch_to_seq(obs)
         dones = batch_to_seq(dones)
         fps = batch_to_seq(fps)
@@ -341,7 +342,7 @@ class NCMultiAgentPolicy(Policy):
             for i in range(self.n_agent):
                 n_n = self.n_n_ls[i]
                 if n_n:
-                    s_i = self._get_comm_s(i, n_n, x, h, p)
+                    s_i = self._get_comm_s(i, n_n, x, h, p) # s_i.shape = [1,64*(n_n+1)]. 0,2,[25,12],[25,64],[25,5]
                 else:
                     if self.identical:
                         x_i = x[i].unsqueeze(0)

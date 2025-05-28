@@ -41,11 +41,12 @@ def init_dir(base_dir, pathes=['log', 'data', 'model']):
 
 def init_log(log_dir):
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s',
-                        level=logging.INFO,
-                        handlers=[
-                            logging.FileHandler('%s/%d.log' % (log_dir, time.time())),
-                            logging.StreamHandler()
-                        ])
+        level=logging.INFO,
+        handlers=[
+            logging.FileHandler('%s/%d.log' % (log_dir, time.time())),
+            # logging.StreamHandler()
+        ])
+
 
 
 def init_test_flag(test_mode):
@@ -68,6 +69,7 @@ class Counter:
         self.total_step = total_step
         self.test_step = test_step
         self.log_step = log_step
+        self.save_freq = 50000
         self.stop = False
 
     def next(self):
@@ -89,9 +91,12 @@ class Counter:
             return True
         return self.stop
 
+    def should_save(self):
+        return (self.cur_step % self.save_freq == 0)
+
 
 class Trainer():
-    def __init__(self, env, model, global_counter, summary_writer, output_path=None):
+    def __init__(self, env, model, global_counter, summary_writer, expe_path):
         self.cur_step = 0
         self.global_counter = global_counter
         self.env = env
@@ -101,7 +106,7 @@ class Trainer():
         self.summary_writer = summary_writer
         assert self.env.T % self.n_step == 0
         self.data = []
-        self.output_path = output_path
+        self.expe_path = expe_path
         self.env.train_mode = True
 
     def _add_summary(self, reward, global_step, is_train=True):
@@ -166,10 +171,11 @@ class Trainer():
                 self.model.add_transition(ob, self.naction, action, reward, value, done)
             # logging
             if self.global_counter.should_log():
-                logging.info('''Training: global step %d, episode step %d,
-                                   ob: %s, a: %s, pi: %s, r: %.2f, train r: %.2f, done: %r''' %
-                             (global_step, self.cur_step,
-                              str(ob), str(action), str(policy), global_reward, np.mean(reward), done))
+                logging.info(f'Training: global step {global_step}, episode step {self.cur_step}, r: {global_reward:.2f}, train r: {np.mean(reward):.2f}, done: {done}') # ob: {str(ob)}, a: {str(action)}, pi: {str(policy)}, 
+
+            if self.global_counter.should_save():
+                self.model.save(self.expe_path['model'], global_step)
+            
             # terminal check must be inside batch loop for CACC env
             if done:
                 break
@@ -227,6 +233,7 @@ class Trainer():
                 self.model.backward(R, dt, self.summary_writer, global_step)
                 # termination
                 if done:
+                    assert len(R) == self.n_step
                     self.env.terminate()
                     # pytorch implementation is faster, wait SUMO for 1s
                     time.sleep(1)
@@ -244,7 +251,7 @@ class Trainer():
             self._log_episode(global_step, mean_reward, std_reward)
 
         df = pd.DataFrame(self.data)
-        df.to_csv(self.output_path + 'train_reward.csv')
+        df.to_csv(self.expe_path['data'] + 'train_reward.csv')
 
 
 class Tester(Trainer):

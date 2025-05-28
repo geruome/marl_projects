@@ -21,7 +21,8 @@ from pdb import set_trace as stx
 
 
 def parse_args():
-    default_config_dir = 'config/config_ia2c_grid.ini'
+    default_config_dir = 'config/config_ma2c_nc_grid.ini'
+    # 'config/config_ia2c_grid.ini'
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='option', help="train or evaluate")
     sp = subparsers.add_parser('train', help='train a single agent under base dir')
@@ -51,7 +52,6 @@ def init_env(config, port=0):
 
 
 def init_agent(env, config, total_step, seed):
-    # stx()
     if env.agent == 'ia2c':
         return IA2C(env.n_s_ls, env.n_a_ls, env.neighbor_mask, env.distance_mask, env.coop_gamma,
                     total_step, config, seed=seed)
@@ -79,16 +79,15 @@ def train(args):
     config_dir = args.config_dir
     config = configparser.ConfigParser()
     config.read(config_dir)
-
-    # init env
-    env = init_env(config['ENV_CONFIG'])
-    logging.info('Training: a dim %r, agent dim: %d' % (env.n_a_ls, env.n_agent))
-
-    base_dir = os.path.join('expe', time.strftime('%Y%m%d_%H%M%S', time.localtime())+'_'+env.agent)
+    
+    base_dir = os.path.join('expe', time.strftime('%Y%m%d_%H%M%S', time.localtime())) # +'_'+env.agent)
     dirs = init_dir(base_dir)
     copy_file(config_dir, dirs['data'])
     init_log(dirs['log'])
-    
+
+    # init env    
+    env = init_env(config['ENV_CONFIG'])
+
     # init step counter
     total_step = int(config.getfloat('TRAIN_CONFIG', 'total_step'))
     test_step = int(config.getfloat('TRAIN_CONFIG', 'test_interval'))
@@ -98,11 +97,12 @@ def train(args):
     # init centralized or multi agent
     seed = config.getint('ENV_CONFIG', 'seed')
     model = init_agent(env, config['MODEL_CONFIG'], total_step, seed)
-    model.load(dirs['model'], train_mode=True)
+    model.load('expe/20250528_140546/model/checkpoint-600000.pt')
+    # model.load(dirs['model'], train_mode=True)
         
     # disable multi-threading for safe SUMO implementation
-    summary_writer = SummaryWriter(dirs['log'], flush_secs=10000)
-    trainer = Trainer(env, model, global_counter, summary_writer, output_path=dirs['data'])
+    summary_writer = SummaryWriter(dirs['log'],) # flush_secs=10000)
+    trainer = Trainer(env, model, global_counter, summary_writer, expe_path=dirs) # output_path=dirs['data'])
     trainer.run()
 
     # save model

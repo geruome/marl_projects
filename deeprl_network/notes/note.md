@@ -37,10 +37,7 @@ nohup python3 main.py train > output.log 2>&1 &
 cd envs/large_grid_data
 sumo-gui -c exp_0.sumocfg
 
-
 ### 
-不输出log ...
-
 25个agent。
 每个agent动作空间为5：phases = ['GGgrrrGGgrrr', 'rrrGrGrrrGrG', 'rrrGGrrrrGGr','rrrGGGrrrrrr', 'rrrrrrrrrGGG']. 每个12字符控制了该路口的3*4个灯。
 状态主要是：node.wave_state. 车流量。
@@ -49,9 +46,9 @@ sumo-gui -c exp_0.sumocfg
 env.n_s_ls, env.n_a_ls: 状态空间长度,动作空间长度 
 n_n: num_neighbor
 env.distance_mask.shape: (25, 25). 各个agent距离.
-env.coop_gamma = 0.9. 传给buffer alpha.
 
 LstmPolicy 包含了 actor_head 和 critic_head. 
+LSTM,batch前后做了state传递. 
 
 train时是直接按概率随机选动作: np.random.choice(np.arange(len(pi)), p=pi)
 test时贪心。
@@ -62,8 +59,16 @@ self._run_critic_head(h, np.array([naction])). critic_head的做法是把 h 和 
 
 fingerprint ??
 
-LSTM,batch前后做了state传递. 
+control_interval_sec：5, 黄灯：2 ??
 
+IA2C优化目标：objective = queue. 怎么算的 ???  
+Intersection delay 又怎么算 ???
+
+
+MA2C是整体一个大的actor、critic. 
+
+
+### changes
 actor_dist = torch.distributions.categorical.Categorical(logits=F.log_softmax(self.actor_head(hs), dim=1)). 错了 !!,不用log_softmax,内部会自己做。
 
 spatial rewards: 对于当前agent, R += (alpha^dis) * reward. 不止考虑当前点的reward.
@@ -90,4 +95,11 @@ tensor([-69.7489, -70.4402, -71.1171, -71.7875, -72.4832, -73.0839, -73.6798,
         -12.1993, -10.7008,  -9.4695,  -8.2287,  -6.7087,  -5.0855,  -3.4865,
          -1.9217])
 
-control_interval_sec：5, 黄灯：2 ??
+Adam
+
+### MA2C_NC
+baseline:
+![alt text](image_1.png)
+
+改成 gae+td0. 
+期望的V值:

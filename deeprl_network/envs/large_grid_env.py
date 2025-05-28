@@ -90,7 +90,7 @@ class LargeGridEnv(TrafficSimulator):
             for nnode in neighbor_map['nt%d' % (i+1)]:
                 ni = self.node_names.index(nnode)
                 self.neighbor_mask[i, ni] = 1
-        logging.info('neighbor mask:\n %r' % self.neighbor_mask)
+        # logging.info('neighbor mask:\n %r' % self.neighbor_mask)
 
     def _init_distance_map(self):
         block0 = np.array([[0,1,2,3,4],[1,0,1,2,3],[2,1,0,1,2],[3,2,1,0,1],[4,3,2,1,0]])
@@ -138,6 +138,7 @@ def plot_cdf(X, c='b', label=None):
     plt.plot(sorted_data, yvals, color=c, label=label)
 
 if __name__ == '__main__':
+    assert 0
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s',
                         level=logging.INFO)
     config = configparser.ConfigParser()

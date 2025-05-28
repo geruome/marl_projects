@@ -77,6 +77,7 @@ class Node:
 
 class TrafficSimulator:
     def __init__(self, config, output_path, is_record, record_stats, port=0):
+
         self.name = config.get('scenario')
         self.seed = config.getint('seed')
         self.control_interval_sec = config.getint('control_interval_sec')
@@ -174,6 +175,7 @@ class TrafficSimulator:
         self.cur_sec = 0
         self.cur_episode += 1
         # initialize fingerprint
+        
         self.update_fingerprint(self._init_policy())
         # next environment random condition should be different
         self.seed += 1
@@ -187,7 +189,7 @@ class TrafficSimulator:
         self._simulate(rest_interval_sec)
         state = self._get_state()
         reward = self._measure_reward_step()
-        stx()
+        # stx()
         done = False
         if self.cur_sec >= self.episode_length_sec:
             done = True
@@ -335,7 +337,7 @@ class TrafficSimulator:
             node = self.nodes[node_name]
             s += '\tneigbor: %r\n' % node.neighbor
             s += '\tilds_in: %r\n' % node.ilds_in
-        logging.info(s)
+        # logging.info(s)
         self._init_action_space()
         self._init_state_space()
 
@@ -389,7 +391,7 @@ class TrafficSimulator:
             queues = []
             waits = []
             for ild in self.nodes[node_name].ilds_in:
-                stx()
+                # stx()
                 if self.obj in ['queue', 'hybrid']:
                     if self.name == 'atsc_real_net':
                         cur_queue = self.sim.lane.getLastStepHaltingNumber(ild[0])

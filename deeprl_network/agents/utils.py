@@ -121,6 +121,7 @@ class OnPolicyBuffer(TransBuffer): # here
         return obs, nas, acts, dones, Rs, Advs
 
     def _add_R_Adv(self, R):
+        assert 0
         Rs = []
         Advs = []
         # use post-step dones here
@@ -135,6 +136,7 @@ class OnPolicyBuffer(TransBuffer): # here
         self.Advs = Advs
 
     def _add_st_R_Adv(self, R, dt):
+        assert 0
         Rs = []
         Advs = []
         # use post-step dones here
@@ -157,28 +159,71 @@ class OnPolicyBuffer(TransBuffer): # here
         self.Rs = Rs
         self.Advs = Advs
 
-    def _add_s_R_Adv(self, R):
+    # def _add_s_R_Adv(self, R):
+    #     Rs = []
+    #     Advs = []
+    #     # use post-step dones here
+    #     for r, v, done in zip(self.rs[::-1], self.vs[::-1], self.dones[:0:-1]):
+    #         R = self.gamma * R * (1.-done)
+    #         # additional spatial rewards
+    #         for t in range(self.max_distance + 1):
+    #             rt = np.sum(r[self.distance_mask == t])
+    #             R += (self.alpha ** t) * rt
+    #         Adv = R - v
+    #         Rs.append(R)
+    #         Advs.append(Adv)
+    #     Rs.reverse()
+    #     Advs.reverse()
+    #     self.Rs = Rs
+    #     self.Advs = Advs
+
+    def _add_s_R_Adv(self, last_v_estimate):
+        # Rs 用于价值网络更新的目标（TD0目标），Advs 用于策略网络更新
         Rs = []
         Advs = []
-        # use post-step dones here
-        for r, v, done in zip(self.rs[::-1], self.vs[::-1], self.dones[:0:-1]):
-            R = self.gamma * R * (1.-done)
-            # additional spatial rewards
+
+        # GAE 的参数
+        # self.gamma 已经是折扣因子 gamma
+        # self.lambda_gae 是 GAE 中的 lambda 参数，通常在 0 到 1 之间
+        if not hasattr(self, 'lambda_gae'):
+            self.lambda_gae = 0.95
+            # raise AttributeError("self.lambda_gae is not defined. Please initialize it (e.g., self.lambda_gae = 0.95).")
+        
+        gae_advantage = 0.0
+
+        v_next = last_v_estimate
+        for t in reversed(range(len(self.rs))):
+            rts = self.rs[t]
+            rt = 0
             for t in range(self.max_distance + 1):
-                rt = np.sum(r[self.distance_mask == t])
-                # stx()
-                R += (self.alpha ** t) * rt
-            Adv = R - v
-            Rs.append(R)
-            Advs.append(Adv)
+                rt += (self.alpha ** t) * np.sum(rts[self.distance_mask == t])
+            v_t = self.vs[t]
+            done_t = self.dones[t] # 注意：这里 done_t 表示的是 S_t 到 S_{t+1} 是否终止
+
+            delta = rt + self.gamma * v_next * (1. - done_t) - v_t
+            # GAE(t) = delta_t + gamma * lambda * GAE(t+1) * (1 - done_t)
+            gae_advantage = delta + self.gamma * self.lambda_gae * (1. - done_t) * gae_advantage
+            
+            td0_target = rt + self.gamma * v_next * (1. - done_t)
+
+            Advs.append(gae_advantage)
+            Rs.append(td0_target) # 这里 Rs 存储的是 TD(0) 目标
+
+            # 更新 v_next 为当前时间步的价值，用于下一次循环 (t-1) 的计算
+            v_next = v_t
+
+        # 反转列表以恢复正序
         Rs.reverse()
         Advs.reverse()
-        self.Rs = Rs
-        self.Advs = Advs
+
+        self.Rs = np.array(Rs) # 转换为 numpy 数组
+        self.Advs = np.array(Advs) # 转换为 numpy 数组
+        # stx()
 
 
-class MultiAgentOnPolicyBuffer(OnPolicyBuffer):
+class MultiAgentOnPolicyBuffer(OnPolicyBuffer): # here
     def __init__(self, gamma, alpha, distance_mask):
+        # assert 0
         super().__init__(gamma, alpha, distance_mask)
 
     def sample_transition(self, R, dt=0):
@@ -191,60 +236,63 @@ class MultiAgentOnPolicyBuffer(OnPolicyBuffer):
         acts = np.transpose(np.array(self.acts, dtype=np.int32))
         Rs = np.array(self.Rs, dtype=np.float32)
         Advs = np.array(self.Advs, dtype=np.float32)
-        dones = np.array(self.dones[:-1], dtype=np.bool)
+        dones = np.array(self.dones[:-1], dtype=bool)
         self.reset(self.dones[-1])
         return obs, policies, acts, dones, Rs, Advs
 
-    def _add_R_Adv(self, R):
-        Rs = []
-        Advs = []
-        vs = np.array(self.vs)
-        for i in range(vs.shape[1]):
-            cur_Rs = []
-            cur_Advs = []
-            cur_R = R[i]
-            for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
-                cur_R = r + self.gamma * cur_R * (1.-done)
-                cur_Adv = cur_R - v
-                cur_Rs.append(cur_R)
-                cur_Advs.append(cur_Adv)
-            cur_Rs.reverse()
-            cur_Advs.reverse()
-            Rs.append(cur_Rs)
-            Advs.append(cur_Advs)
-        self.Rs = np.array(Rs)
-        self.Advs = np.array(Advs)
+    # def _add_R_Adv(self, R):
+    #     Rs = []
+    #     Advs = []
+    #     vs = np.array(self.vs)
+    #     for i in range(vs.shape[1]):
+    #         cur_Rs = []
+    #         cur_Advs = []
+    #         cur_R = R[i]
+    #         for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
+    #             cur_R = r + self.gamma * cur_R * (1.-done)
+    #             cur_Adv = cur_R - v
+    #             cur_Rs.append(cur_R)
+    #             cur_Advs.append(cur_Adv)
+    #         cur_Rs.reverse()
+    #         cur_Advs.reverse()
+    #         Rs.append(cur_Rs)
+    #         Advs.append(cur_Advs)
+    #     self.Rs = np.array(Rs)
+    #     self.Advs = np.array(Advs)
 
-    def _add_st_R_Adv(self, R, dt):
-        Rs = []
-        Advs = []
-        vs = np.array(self.vs)
-        for i in range(vs.shape[1]):
-            cur_Rs = []
-            cur_Advs = []
-            cur_R = R[i]
-            tdiff = dt
-            distance_mask = self.distance_mask[i]
-            max_distance = self.max_distance[i]
-            for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
-                cur_R = self.gamma * cur_R * (1.-done)
-                if done:
-                    tdiff = 0
-                # additional spatial rewards
-                tmax = min(tdiff, max_distance)
-                for t in range(tmax + 1):
-                    rt = np.sum(r[distance_mask==t])
-                    cur_R += (self.gamma * self.alpha) ** t * rt
-                cur_Adv = cur_R - v
-                tdiff += 1
-                cur_Rs.append(cur_R)
-                cur_Advs.append(cur_Adv)
-            cur_Rs.reverse()
-            cur_Advs.reverse()
-            Rs.append(cur_Rs)
-            Advs.append(cur_Advs)
-        self.Rs = np.array(Rs)
-        self.Advs = np.array(Advs)
+    def _add_R_Adv(self, last_v_estimates):
+        if not hasattr(self, 'gamma'):
+            raise AttributeError("self.gamma (discount factor) is not defined. Please initialize it.")
+        if not hasattr(self, 'lambda_gae'):
+            self.lambda_gae = 0.95
+
+        num_timesteps = len(self.rs)
+        num_agents = len(self.vs[0]) 
+
+        rs_np = np.array(self.rs) 
+        vs_np = np.array(self.vs)         
+        dones_np = np.array(self.dones)[1:]
+
+        all_Rs = np.zeros((num_agents, num_timesteps))
+        all_Advs = np.zeros((num_agents, num_timesteps))
+
+        for i in range(num_agents):
+            gae_advantage_accum = 0.0
+            v_next_agent = last_v_estimates[i]
+            for t in reversed(range(num_timesteps)):
+                r_current_step = rs_np[t]
+                v_current_step = vs_np[t, i] 
+                done_current_step = dones_np[t] 
+                delta = r_current_step + self.gamma * v_next_agent * (1. - done_current_step) - v_current_step
+                gae_advantage_accum = delta + self.gamma * self.lambda_gae * (1. - done_current_step) * gae_advantage_accum
+                td0_target = r_current_step + self.gamma * v_next_agent * (1. - done_current_step)
+                all_Advs[i, t] = gae_advantage_accum
+                all_Rs[i, t] = td0_target
+                v_next_agent = v_current_step
+
+        self.Rs = all_Rs  # 形状为 (num_agents, num_timesteps)
+        self.Advs = all_Advs # 形状为 (num_agents, num_timesteps)
+        stx()
 
     def _add_s_R_Adv(self, R):
         Rs = []

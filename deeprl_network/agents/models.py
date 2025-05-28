@@ -61,35 +61,43 @@ class IA2C:
             out.append(cur_out)
         return out
 
-    def load(self, model_dir, global_step=None, train_mode=False):
-        save_file = None
-        save_step = 0
-        if os.path.exists(model_dir):
-            if global_step is None:
-                for file in os.listdir(model_dir):
-                    if file.startswith('checkpoint'):
-                        tokens = file.split('.')[0].split('-')
-                        if len(tokens) != 2:
-                            continue
-                        cur_step = int(tokens[1])
-                        if cur_step > save_step:
-                            save_file = file
-                            save_step = cur_step
-            else:
-                save_file = 'checkpoint-{:d}.pt'.format(global_step)
-        if save_file is not None:
-            file_path = model_dir + save_file
-            checkpoint = torch.load(file_path)
-            logging.info('Checkpoint loaded: {}'.format(file_path))
-            self.policy.load_state_dict(checkpoint['model_state_dict'])
-            if train_mode:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-                self.policy.train()
-            else:
-                self.policy.eval()
-            return True
-        logging.error('Can not find checkpoint for {}'.format(model_dir))
-        return False
+    def load(self, save_file):
+        file_path = model_dir + save_file
+        checkpoint = torch.load(file_path)
+        logging.info('Checkpoint loaded: {}'.format(file_path))
+        self.policy.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.policy.train()
+
+    # def load(self, model_dir, global_step=None, train_mode=False):
+    #     save_file = None
+    #     save_step = 0
+    #     if os.path.exists(model_dir):
+    #         if global_step is None:
+    #             for file in os.listdir(model_dir):
+    #                 if file.startswith('checkpoint'):
+    #                     tokens = file.split('.')[0].split('-')
+    #                     if len(tokens) != 2:
+    #                         continue
+    #                     cur_step = int(tokens[1])
+    #                     if cur_step > save_step:
+    #                         save_file = file
+    #                         save_step = cur_step
+    #         else:
+    #             save_file = 'checkpoint-{:d}.pt'.format(global_step)
+    #     if save_file is not None:
+    #         file_path = model_dir + save_file
+    #         checkpoint = torch.load(file_path)
+    #         logging.info('Checkpoint loaded: {}'.format(file_path))
+    #         self.policy.load_state_dict(checkpoint['model_state_dict'])
+    #         if train_mode:
+    #             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    #             self.policy.train()
+    #         else:
+    #             self.policy.eval()
+    #         return True
+    #     logging.error('Can not find checkpoint for {}'.format(model_dir))
+    #     return False
 
     def reset(self):
         for i in range(self.n_agent):
@@ -252,7 +260,7 @@ class MA2C_NC(IA2C):
             self.trans_buffer.add_transition(pad_ob, pad_p, action,
                                              reward, value, done)
 
-    def backward(self, Rends, dt, summary_writer=None, global_step=None): # here
+    def backward(self, Rends, dt, summary_writer=None, global_step=None):
         self.optimizer.zero_grad()
         obs, ps, acts, dones, Rs, Advs = self.trans_buffer.sample_transition(Rends, dt)
         self.policy.backward(obs, ps, acts, dones, Rs, Advs, self.e_coef, self.v_coef,
@@ -263,7 +271,7 @@ class MA2C_NC(IA2C):
         if self.lr_decay != 'constant':
             self._update_lr()
 
-    def forward(self, obs, done, ps, actions=None, out_type='p'):
+    def forward(self, obs, done, ps, actions=None, out_type='p'): # ps:上一时刻的policy
         if self.identical_agent:
             return self.policy.forward(np.array(obs), done, np.array(ps),
                                        actions, out_type)
