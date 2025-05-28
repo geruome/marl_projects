@@ -101,5 +101,7 @@ Adam
 baseline:
 ![alt text](image_1.png)
 
+max_grad_norm = 40 ??
+
 改成 gae+td0. 
 期望的V值:

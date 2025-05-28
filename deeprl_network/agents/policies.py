@@ -57,6 +57,7 @@ class Policy(nn.Module):
         return self.critic_head(h).squeeze()
 
     def _run_loss(self, actor_dist, e_coef, v_coef, vs, As, Rs, Advs): # here
+        # stx()
         log_probs = actor_dist.log_prob(As)
         policy_loss = -(log_probs * Advs).mean()
         entropy_loss = -(actor_dist.entropy()).mean() * e_coef
@@ -194,7 +195,7 @@ class NCMultiAgentPolicy(Policy):
         # backward grad is limited to the minibatch
         self.states_bw = new_states.detach()
         ps = self._run_actor_heads(hs)
-        vs = self._run_critic_heads(hs, acts)
+        vs = self._run_critic_heads(hs, acts) # [25, 120, 64], [25, 120] -> 25,120
         self.policy_loss = 0
         self.value_loss = 0
         self.entropy_loss = 0
@@ -225,7 +226,7 @@ class NCMultiAgentPolicy(Policy):
             return self._run_actor_heads(h, detach=True)
         else:
             action = torch.from_numpy(np.expand_dims(action, axis=1)).long()
-            return self._run_critic_heads(h, action, detach=True)
+            return self._run_critic_heads(h, action, detach=True) # h:[25, 1, 64] action:[25, 1] -> 25,1
 
     def _get_comm_s(self, i, n_n, x, h, p):
         js = torch.from_numpy(np.where(self.neighbor_mask[i])[0]).long()

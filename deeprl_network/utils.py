@@ -152,7 +152,8 @@ class Trainer():
 
     def explore(self, prev_ob, prev_done):
         ob = prev_ob
-        done = prev_done
+        done = False
+        end = False
         for _ in range(self.n_step): # Batch_size=120
             # pre-decision
             policy, action = self._get_policy(ob, done)
@@ -160,7 +161,7 @@ class Trainer():
             value = self._get_value(ob, done, action)
             # transition
             self.env.update_fingerprint(policy)
-            next_ob, reward, done, global_reward = self.env.step(action)
+            next_ob, reward, end, global_reward = self.env.step(action)
             self.episode_rewards.append(global_reward)
             global_step = self.global_counter.next()
             self.cur_step += 1
@@ -177,15 +178,17 @@ class Trainer():
                 self.model.save(self.expe_path['model'], global_step)
             
             # terminal check must be inside batch loop for CACC env
-            if done:
+            if end:
+                assert _==self.n_step - 1
                 break
             ob = next_ob
-        if done:
-            R = np.zeros(self.model.n_agent)
-        else:
-            _, action = self._get_policy(ob, done)
-            R = self._get_value(ob, done, action)
-        return ob, done, R
+        # if done:
+        #     stx()
+        #     R = np.zeros(self.model.n_agent)
+        # else:
+        _, action = self._get_policy(ob, done)
+        R = self._get_value(ob, done, action)
+        return ob, end, R
 
     def perform(self, test_ind, gui=False):
         ob = self.env.reset(gui=gui, test_ind=test_ind)
@@ -218,7 +221,7 @@ class Trainer():
             # np.random.seed(self.env.seed)
             ob = self.env.reset()
             # note this done is pre-decision to reset LSTM states!
-            done = True
+            done = True # ??
             self.model.reset()
             self.cur_step = 0
             self.episode_rewards = []
@@ -233,7 +236,8 @@ class Trainer():
                 self.model.backward(R, dt, self.summary_writer, global_step)
                 # termination
                 if done:
-                    assert len(R) == self.n_step
+                    # stx()
+                    # assert len(R) == self.n_step
                     self.env.terminate()
                     # pytorch implementation is faster, wait SUMO for 1s
                     time.sleep(1)

@@ -61,8 +61,7 @@ class IA2C:
             out.append(cur_out)
         return out
 
-    def load(self, save_file):
-        file_path = model_dir + save_file
+    def load(self, file_path):
         checkpoint = torch.load(file_path)
         logging.info('Checkpoint loaded: {}'.format(file_path))
         self.policy.load_state_dict(checkpoint['model_state_dict'])

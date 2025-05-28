@@ -240,59 +240,62 @@ class MultiAgentOnPolicyBuffer(OnPolicyBuffer): # here
         self.reset(self.dones[-1])
         return obs, policies, acts, dones, Rs, Advs
 
-    # def _add_R_Adv(self, R):
-    #     Rs = []
-    #     Advs = []
-    #     vs = np.array(self.vs)
-    #     for i in range(vs.shape[1]):
-    #         cur_Rs = []
-    #         cur_Advs = []
-    #         cur_R = R[i]
-    #         for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
-    #             cur_R = r + self.gamma * cur_R * (1.-done)
-    #             cur_Adv = cur_R - v
-    #             cur_Rs.append(cur_R)
-    #             cur_Advs.append(cur_Adv)
-    #         cur_Rs.reverse()
-    #         cur_Advs.reverse()
-    #         Rs.append(cur_Rs)
-    #         Advs.append(cur_Advs)
-    #     self.Rs = np.array(Rs)
-    #     self.Advs = np.array(Advs)
+    def _add_R_Adv(self, R):
+        Rs = []
+        Advs = []
+        vs = np.array(self.vs) # 120,25
+        for i in range(vs.shape[1]):
+            cur_Rs = []
+            cur_Advs = []
+            cur_R = R[i]
+            for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
+                cur_R = r + self.gamma * cur_R * (1.-done)
+                cur_Adv = cur_R - v
+                cur_Rs.append(cur_R)
+                cur_Advs.append(cur_Adv)
+            cur_Rs.reverse()
+            cur_Advs.reverse()
+            Rs.append(cur_Rs)
+            Advs.append(cur_Advs)
+        self.Rs = np.array(Rs) # 25,120
+        self.Advs = np.array(Advs) # 25,120
+        # print(((vs.T-self.Rs)**2).mean())
+        # print(vs.shape, vs.mean(), 'pre_cal')
+        # stx()
 
-    def _add_R_Adv(self, last_v_estimates):
-        if not hasattr(self, 'gamma'):
-            raise AttributeError("self.gamma (discount factor) is not defined. Please initialize it.")
-        if not hasattr(self, 'lambda_gae'):
-            self.lambda_gae = 0.95
+    # def _add_R_Adv(self, last_v_estimates):
+    #     if not hasattr(self, 'gamma'):
+    #         raise AttributeError("self.gamma (discount factor) is not defined. Please initialize it.")
+    #     if not hasattr(self, 'lambda_gae'):
+    #         self.lambda_gae = 0.95
 
-        num_timesteps = len(self.rs)
-        num_agents = len(self.vs[0]) 
+    #     num_timesteps = len(self.rs)
+    #     num_agents = len(self.vs[0]) 
 
-        rs_np = np.array(self.rs) 
-        vs_np = np.array(self.vs)         
-        dones_np = np.array(self.dones)[1:]
+    #     rs_np = np.array(self.rs) 
+    #     vs_np = np.array(self.vs)         
+    #     dones_np = np.array(self.dones)[1:]
 
-        all_Rs = np.zeros((num_agents, num_timesteps))
-        all_Advs = np.zeros((num_agents, num_timesteps))
+    #     all_Rs = np.zeros((num_agents, num_timesteps))
+    #     all_Advs = np.zeros((num_agents, num_timesteps))
 
-        for i in range(num_agents):
-            gae_advantage_accum = 0.0
-            v_next_agent = last_v_estimates[i]
-            for t in reversed(range(num_timesteps)):
-                r_current_step = rs_np[t]
-                v_current_step = vs_np[t, i] 
-                done_current_step = dones_np[t] 
-                delta = r_current_step + self.gamma * v_next_agent * (1. - done_current_step) - v_current_step
-                gae_advantage_accum = delta + self.gamma * self.lambda_gae * (1. - done_current_step) * gae_advantage_accum
-                td0_target = r_current_step + self.gamma * v_next_agent * (1. - done_current_step)
-                all_Advs[i, t] = gae_advantage_accum
-                all_Rs[i, t] = td0_target
-                v_next_agent = v_current_step
+    #     for i in range(num_agents):
+    #         gae_advantage_accum = 0.0
+    #         v_next_agent = last_v_estimates[i]
+    #         for t in reversed(range(num_timesteps)):
+    #             r_current_step = rs_np[t]
+    #             v_current_step = vs_np[t, i] 
+    #             done_current_step = dones_np[t] 
+    #             delta = r_current_step + self.gamma * v_next_agent * (1. - done_current_step) - v_current_step
+    #             gae_advantage_accum = delta + self.gamma * self.lambda_gae * (1. - done_current_step) * gae_advantage_accum
+    #             td0_target = r_current_step + self.gamma * v_next_agent * (1. - done_current_step)
+    #             all_Advs[i, t] = gae_advantage_accum
+    #             all_Rs[i, t] = td0_target
+    #             v_next_agent = v_current_step
 
-        self.Rs = all_Rs  # 形状为 (num_agents, num_timesteps)
-        self.Advs = all_Advs # 形状为 (num_agents, num_timesteps)
-        stx()
+    #     self.Rs = all_Rs  # 形状为 (num_agents, num_timesteps)
+    #     self.Advs = all_Advs # 形状为 (num_agents, num_timesteps)
+    #     stx()
 
     def _add_s_R_Adv(self, R):
         Rs = []

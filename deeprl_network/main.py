@@ -97,7 +97,7 @@ def train(args):
     # init centralized or multi agent
     seed = config.getint('ENV_CONFIG', 'seed')
     model = init_agent(env, config['MODEL_CONFIG'], total_step, seed)
-    model.load('expe/20250528_140546/model/checkpoint-600000.pt')
+    # model.load(file_path='expe/20250527_220650/models/checkpoint-1000080.pt')
     # model.load(dirs['model'], train_mode=True)
         
     # disable multi-threading for safe SUMO implementation
