@@ -49,9 +49,6 @@ class IA2C:
         if self.max_grad_norm > 0:
             nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
         self.optimizer.step()
-        self.lr_scheduler.step()
-        if summary_writer:
-            summary_writer.add_scalar(f'item/learning_rate', self.optimizer.param_groups[0]['lr'], global_step=global_step)
         # if self.lr_decay != 'constant':
         #     self._update_lr()
 
@@ -163,8 +160,8 @@ class IA2C:
         # init optimizer
         alpha = model_config.getfloat('rmsp_alpha')
         epsilon = model_config.getfloat('rmsp_epsilon')
-        # self.optimizer = optim.RMSprop(self.policy.parameters(), self.lr_init, eps=epsilon, alpha=alpha)
-        self.optimizer, self.lr_scheduler = get_optimizer_cosine_warmup_scheduler(self.policy, self.total_step // 120, learning_rate=self.lr_init) # here
+        self.optimizer = optim.RMSprop(self.policy.parameters(), self.lr_init, eps=epsilon, alpha=alpha)
+        # self.optimizer, self.lr_scheduler = get_optimizer_cosine_warmup_scheduler(self.policy, self.total_step // 120, learning_rate=self.lr_init) # here
         # init transition buffer
         gamma = model_config.getfloat('gamma')
         self._init_trans_buffer(gamma, distance_mask, coop_gamma)
@@ -240,9 +237,9 @@ class MA2C_NC(IA2C):
         if self.max_grad_norm > 0:
             nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
         self.optimizer.step()
-        self.lr_scheduler.step()
-        if summary_writer:
-            summary_writer.add_scalar(f'item/learning_rate', self.optimizer.param_groups[0]['lr'], global_step=global_step)
+        # self.lr_scheduler.step()
+        # if summary_writer:
+        #     summary_writer.add_scalar(f'item/learning_rate', self.optimizer.param_groups[0]['lr'], global_step=global_step)
 
     def forward(self, obs, done, ps, actions=None, out_type='p'): # ps:上一时刻的policy
         if self.identical_agent:

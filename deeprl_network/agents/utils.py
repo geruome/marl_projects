@@ -242,18 +242,42 @@ class MultiAgentOnPolicyBuffer(OnPolicyBuffer): # here
         self.reset(self.dones[-1])
         return obs, policies, acts, dones, Rs, Advs
 
-    def _add_R_Adv(self, R):
+    # def _add_R_Adv(self, R): # original
+    #     Rs = []
+    #     Advs = []
+    #     vs = np.array(self.vs) # 120,25
+    #     for i in range(vs.shape[1]):
+    #         cur_Rs = []
+    #         cur_Advs = []
+    #         cur_R = R[i]
+    #         for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
+    #             cur_R = r + self.gamma * cur_R * (1.-done)
+    #             cur_Adv = cur_R - v
+    #             cur_Rs.append(cur_R)
+    #             cur_Advs.append(cur_Adv)
+    #         cur_Rs.reverse()
+    #         cur_Advs.reverse()
+    #         Rs.append(cur_Rs)
+    #         Advs.append(cur_Advs)
+    #     self.Rs = np.array(Rs) # 25,120
+    #     self.Advs = np.array(Advs) # 25,120
+
+    def _add_R_Adv(self, last_vs): # TD0
         Rs = []
         Advs = []
         vs = np.array(self.vs) # 120,25
         for i in range(vs.shape[1]):
             cur_Rs = []
             cur_Advs = []
-            cur_R = R[i]
-            for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
-                cur_R = r + self.gamma * cur_R * (1.-done)
+            cur_R = last_vs[i]
+            v_next = last_vs[i]
+            for r, v, in zip(self.rs[::-1], vs[::-1,i]):
+                cur_R = r + self.gamma * cur_R
+                TD_target = r + self.gamma * v_next
+                v_next = v                
                 cur_Adv = cur_R - v
-                cur_Rs.append(cur_R)
+                # cur_Rs.append(cur_R)
+                cur_Rs.append(TD_target)
                 cur_Advs.append(cur_Adv)
             cur_Rs.reverse()
             cur_Advs.reverse()
@@ -262,10 +286,8 @@ class MultiAgentOnPolicyBuffer(OnPolicyBuffer): # here
         self.Rs = np.array(Rs) # 25,120
         self.Advs = np.array(Advs) # 25,120
         # print(((vs.T-self.Rs)**2).mean())
-        # print(vs.shape, vs.mean(), 'pre_cal')
-        # stx()
 
-    # def _add_R_Adv(self, last_v_estimates):
+    # def _add_R_Adv(self, last_vs): # GAE + TD0
     #     if not hasattr(self, 'gamma'):
     #         raise AttributeError("self.gamma (discount factor) is not defined. Please initialize it.")
     #     if not hasattr(self, 'lambda_gae'):
@@ -276,54 +298,26 @@ class MultiAgentOnPolicyBuffer(OnPolicyBuffer): # here
 
     #     rs_np = np.array(self.rs) 
     #     vs_np = np.array(self.vs)         
-    #     dones_np = np.array(self.dones)[1:]
 
     #     all_Rs = np.zeros((num_agents, num_timesteps))
     #     all_Advs = np.zeros((num_agents, num_timesteps))
 
     #     for i in range(num_agents):
     #         gae_advantage_accum = 0.0
-    #         v_next_agent = last_v_estimates[i]
+    #         v_next_agent = last_vs[i]
     #         for t in reversed(range(num_timesteps)):
     #             r_current_step = rs_np[t]
     #             v_current_step = vs_np[t, i] 
-    #             done_current_step = dones_np[t] 
-    #             delta = r_current_step + self.gamma * v_next_agent * (1. - done_current_step) - v_current_step
-    #             gae_advantage_accum = delta + self.gamma * self.lambda_gae * (1. - done_current_step) * gae_advantage_accum
-    #             td0_target = r_current_step + self.gamma * v_next_agent * (1. - done_current_step)
+    #             delta = r_current_step + self.gamma * v_next_agent - v_current_step
+    #             gae_advantage_accum = delta + self.gamma * self.lambda_gae * gae_advantage_accum
+    #             td0_target = r_current_step + self.gamma * v_next_agent
     #             all_Advs[i, t] = gae_advantage_accum
     #             all_Rs[i, t] = td0_target
     #             v_next_agent = v_current_step
 
     #     self.Rs = all_Rs  # 形状为 (num_agents, num_timesteps)
     #     self.Advs = all_Advs # 形状为 (num_agents, num_timesteps)
-    #     stx()
 
-    def _add_s_R_Adv(self, R):
-        Rs = []
-        Advs = []
-        vs = np.array(self.vs)
-        for i in range(vs.shape[1]):
-            cur_Rs = []
-            cur_Advs = []
-            cur_R = R[i]
-            distance_mask = self.distance_mask[i]
-            max_distance = self.max_distance[i]
-            for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
-                cur_R = self.gamma * cur_R * (1.-done)
-                # additional spatial rewards
-                for t in range(max_distance + 1):
-                    rt = np.sum(r[distance_mask==t])
-                    cur_R += (self.alpha ** t) * rt
-                cur_Adv = cur_R - v
-                cur_Rs.append(cur_R)
-                cur_Advs.append(cur_Adv)
-            cur_Rs.reverse()
-            cur_Advs.reverse()
-            Rs.append(cur_Rs)
-            Advs.append(cur_Advs)
-        self.Rs = np.array(Rs)
-        self.Advs = np.array(Advs)
 
 """
 util functions

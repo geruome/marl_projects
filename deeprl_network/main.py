@@ -80,7 +80,7 @@ def train(args):
     config = configparser.ConfigParser()
     config.read(config_dir)
     
-    base_dir = os.path.join('expe', time.strftime('%Y%m%d_%H%M%S', time.localtime())) # +'_'+env.agent)
+    base_dir = os.path.join('expe', time.strftime('%m%d_%H%M', time.localtime())) # +'_'+env.agent)
     dirs = init_dir(base_dir)
     copy_file(config_dir, dirs['data'])
     init_log(dirs['log'])
@@ -97,7 +97,7 @@ def train(args):
     # init centralized or multi agent
     seed = config.getint('ENV_CONFIG', 'seed')
     model = init_agent(env, config['MODEL_CONFIG'], total_step, seed)
-    # model.load(file_path='expe/20250527_220650/models/checkpoint-1000080.pt')
+    # model.load(file_path='expe/20250529_131124/model/checkpoint-250000.pt')
     # model.load(dirs['model'], train_mode=True)
         
     # disable multi-threading for safe SUMO implementation

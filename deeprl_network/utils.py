@@ -108,12 +108,13 @@ class Trainer():
         self.data = []
         self.expe_path = expe_path
         self.env.train_mode = True
+        self.sum0 = 0; self.sum1 = 0; self.sum2 = 0
 
     def _add_summary(self, reward, global_step, is_train=True):
         if is_train:
-            self.summary_writer.add_scalar('train_reward', reward, global_step=global_step)
+            self.summary_writer.add_scalar('item/train_reward', reward, global_step=global_step)
         else:
-            self.summary_writer.add_scalar('test_reward', reward, global_step=global_step)
+            self.summary_writer.add_scalar('item/test_reward', reward, global_step=global_step)
 
     def _get_policy(self, ob, done, mode='train'):
         if self.agent.startswith('ma2c'):
@@ -201,22 +202,24 @@ class Trainer():
             self.cur_step = 0
             self.episode_rewards = []
             while True:
+                time0 = time.time()
+                time1 = time.time()
                 ob, done, R = self.explore(ob, done)
-                # len(ob)=len(R): 25=5*5.  len(obs): 36,48,48,48,36,48,60,60,60,48,48,60,60,60,48,48,60,60,60,48,36,48,48,48,36,
-                # for obs in ob:
-                #     print(len(obs), end=',')
-                # print()
+                self.sum1 += time.time()-time1
                 dt = self.env.T - self.cur_step
                 global_step = self.global_counter.cur_step
+                time2 = time.time()
                 self.model.backward(R, dt, self.summary_writer, global_step)
-                # termination
+                self.sum2 += time.time() - time2
+                self.sum0 += time.time() - time0
                 if done:
-                    # stx()
-                    # assert len(R) == self.n_step
                     self.env.terminate()
                     # pytorch implementation is faster, wait SUMO for 1s
                     time.sleep(1)
                     break
+
+                print(f"explore_time: {self.sum1/self.sum0}, backward_time: {self.sum2/self.sum0}")
+
             rewards = np.array(self.episode_rewards)
             # len(rewards): 720
             mean_reward = np.mean(rewards)
