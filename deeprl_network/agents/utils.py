@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from pdb import set_trace as stx
+import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 
 """
 initializers
@@ -341,3 +343,53 @@ class Scheduler:
         else:
             return self.val
 
+
+def get_optimizer_cosine_warmup_scheduler(model, total_steps, warmup_rate=0.01, 
+                                     learning_rate=1e-3, min_lr=1e-5, weight_decay=0.01):
+
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay) # betas=(0.9, 0.999), eps=1e-8,
+    warmup_steps = int(warmup_rate * total_steps)
+    
+    # 2. 定义预热函数
+    def lr_lambda(current_step: int):
+        if current_step < warmup_steps:
+            return float(current_step) / float(max(1, warmup_steps))
+        else:
+            # 余弦衰减阶段：从1到min_lr/learning_rate的比例
+            # 计算余弦衰减的“有效”步数和总步数
+            cosine_total_steps = total_steps - warmup_steps
+            cosine_current_step = current_step - warmup_steps
+            
+            # 避免除以零
+            if cosine_total_steps == 0:
+                return min_lr / learning_rate
+            
+            # 标准余弦衰减公式
+            # lr_ratio = min_lr + 0.5 * (learning_rate - min_lr) * (1 + cos(pi * current_step / total_steps))
+            # 我们这里返回的是学习率的比例，所以需要调整
+            
+            # cosine_annealing_ratio = 0.5 * (1 + math.cos(math.pi * cosine_current_step / cosine_total_steps))
+            # 这里的余弦衰减是从 learning_rate 衰减到 min_lr
+            # 衰减的范围是 (learning_rate - min_lr)
+            # 所以比例是 (min_lr + (learning_rate - min_lr) * 0.5 * (1 + cos(...))) / learning_rate
+            
+            # 更简洁的表达方式是，将其视为从 learning_rate 衰减到 min_lr 的比例
+            decay_ratio = (cosine_current_step / cosine_total_steps)
+            
+            # 使用标准的余弦衰减公式，但要注意 min_lr 是相对的
+            # 余弦衰减是从 max_lr 到 min_lr，但我们的 LambdaLR 返回的是一个乘数 (0到1)
+            # 所以需要计算当前学习率与最大学习率的比例
+            
+            # 学习率从 learning_rate 衰减到 min_lr 的余弦曲线
+            # 最终学习率 = min_lr + (learning_rate - min_lr) * 0.5 * (1 + cos(pi * decay_ratio))
+            # LambdaLR 返回的是：最终学习率 / learning_rate
+            
+            factor = 0.5 * (1 + torch.cos(torch.tensor(torch.pi * decay_ratio)))
+            return float(min_lr / learning_rate + (1 - min_lr / learning_rate) * factor)
+
+
+    # 3. 定义学习率调度器
+    # LambdaLR 允许你传入一个函数，该函数会计算当前学习率的乘数
+    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+    
+    return optimizer, scheduler

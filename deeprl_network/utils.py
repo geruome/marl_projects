@@ -172,7 +172,8 @@ class Trainer():
                 self.model.add_transition(ob, self.naction, action, reward, value, done)
             # logging
             if self.global_counter.should_log():
-                logging.info(f'Training: global step {global_step}, episode step {self.cur_step}, r: {global_reward:.2f}, train r: {np.mean(reward):.2f}, done: {done}') # ob: {str(ob)}, a: {str(action)}, pi: {str(policy)}, 
+                # logging.info(f'Training: global step {global_step}, episode step {self.cur_step}, r: {global_reward:.2f}, train r: {np.mean(reward):.2f}, done: {done}') # ob: {str(ob)}, a: {str(action)}, pi: {str(policy)}, 
+                logging.info(f'Training: global step {global_step}, episode step {self.cur_step}, episode reward: {global_reward:.2f}, end: {end}') # ob: {str(ob)}, a: {str(action)}, pi: {str(policy)}, 
 
             if self.global_counter.should_save():
                 self.model.save(self.expe_path['model'], global_step)
@@ -189,32 +190,6 @@ class Trainer():
         _, action = self._get_policy(ob, done)
         R = self._get_value(ob, done, action)
         return ob, end, R
-
-    def perform(self, test_ind, gui=False):
-        ob = self.env.reset(gui=gui, test_ind=test_ind)
-        rewards = []
-        # note this done is pre-decision to reset LSTM states!
-        done = True
-        self.model.reset()
-        while True:
-            if self.agent == 'greedy':
-                action = self.model.forward(ob)
-            else:
-                # in on-policy learning, test policy has to be stochastic
-                if self.env.name.startswith('atsc'):
-                    policy, action = self._get_policy(ob, done)
-                else:
-                    # for mission-critic tasks like CACC, we need deterministic policy
-                    policy, action = self._get_policy(ob, done, mode='test')
-                self.env.update_fingerprint(policy)
-            next_ob, reward, done, global_reward = self.env.step(action)
-            rewards.append(global_reward)
-            if done:
-                break
-            ob = next_ob
-        mean_reward = np.mean(np.array(rewards))
-        std_reward = np.std(np.array(rewards))
-        return mean_reward, std_reward
 
     def run(self):
         while not self.global_counter.should_stop():
@@ -246,12 +221,6 @@ class Trainer():
             # len(rewards): 720
             mean_reward = np.mean(rewards)
             std_reward = np.std(rewards)
-            # NOTE: for CACC we have to run another testing episode after each
-            # training episode since the reward and policy settings are different!
-            if not self.env.name.startswith('atsc'):
-                self.env.train_mode = False
-                mean_reward, std_reward = self.perform(-1)
-                self.env.train_mode = True
             self._log_episode(global_step, mean_reward, std_reward)
 
         df = pd.DataFrame(self.data)

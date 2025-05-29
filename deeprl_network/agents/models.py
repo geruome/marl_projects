@@ -7,7 +7,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from agents.utils import OnPolicyBuffer, MultiAgentOnPolicyBuffer, Scheduler
+from agents.utils import OnPolicyBuffer, MultiAgentOnPolicyBuffer, Scheduler, get_optimizer_cosine_warmup_scheduler
 from agents.policies import (LstmPolicy, FPPolicy, ConsensusPolicy, NCMultiAgentPolicy,
                              CommNetMultiAgentPolicy, DIALMultiAgentPolicy)
 import logging
@@ -49,8 +49,11 @@ class IA2C:
         if self.max_grad_norm > 0:
             nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
         self.optimizer.step()
-        if self.lr_decay != 'constant':
-            self._update_lr()
+        self.lr_scheduler.step()
+        if summary_writer:
+            summary_writer.add_scalar(f'item/learning_rate', self.optimizer.param_groups[0]['lr'], global_step=global_step)
+        # if self.lr_decay != 'constant':
+        #     self._update_lr()
 
     def forward(self, obs, done, nactions=None, out_type='p'):
         out = []
@@ -67,36 +70,6 @@ class IA2C:
         self.policy.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.policy.train()
-
-    # def load(self, model_dir, global_step=None, train_mode=False):
-    #     save_file = None
-    #     save_step = 0
-    #     if os.path.exists(model_dir):
-    #         if global_step is None:
-    #             for file in os.listdir(model_dir):
-    #                 if file.startswith('checkpoint'):
-    #                     tokens = file.split('.')[0].split('-')
-    #                     if len(tokens) != 2:
-    #                         continue
-    #                     cur_step = int(tokens[1])
-    #                     if cur_step > save_step:
-    #                         save_file = file
-    #                         save_step = cur_step
-    #         else:
-    #             save_file = 'checkpoint-{:d}.pt'.format(global_step)
-    #     if save_file is not None:
-    #         file_path = model_dir + save_file
-    #         checkpoint = torch.load(file_path)
-    #         logging.info('Checkpoint loaded: {}'.format(file_path))
-    #         self.policy.load_state_dict(checkpoint['model_state_dict'])
-    #         if train_mode:
-    #             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    #             self.policy.train()
-    #         else:
-    #             self.policy.eval()
-    #         return True
-    #     logging.error('Can not find checkpoint for {}'.format(model_dir))
-    #     return False
 
     def reset(self):
         for i in range(self.n_agent):
@@ -174,11 +147,11 @@ class IA2C:
         # init lr scheduler
         self.lr_init = model_config.getfloat('lr_init')
         self.lr_decay = model_config.get('lr_decay')
-        if self.lr_decay == 'constant':
-            self.lr_scheduler = Scheduler(self.lr_init, decay=self.lr_decay)
-        else:
-            lr_min = model_config.getfloat('lr_min')
-            self.lr_scheduler = Scheduler(self.lr_init, lr_min, self.total_step, decay=self.lr_decay)
+        # if self.lr_decay == 'constant':
+        #     self.lr_scheduler = Scheduler(self.lr_init, decay=self.lr_decay)
+        # else:
+        #     lr_min = model_config.getfloat('lr_min')
+        #     self.lr_scheduler = Scheduler(self.lr_init, lr_min, self.total_step, decay=self.lr_decay)
 
     def _init_train(self, model_config, distance_mask, coop_gamma):
         # init lr scheduler
@@ -190,8 +163,8 @@ class IA2C:
         # init optimizer
         alpha = model_config.getfloat('rmsp_alpha')
         epsilon = model_config.getfloat('rmsp_epsilon')
-        self.optimizer = optim.RMSprop(self.policy.parameters(), self.lr_init, 
-                                       eps=epsilon, alpha=alpha)
+        # self.optimizer = optim.RMSprop(self.policy.parameters(), self.lr_init, eps=epsilon, alpha=alpha)
+        self.optimizer, self.lr_scheduler = get_optimizer_cosine_warmup_scheduler(self.policy, self.total_step // 120, learning_rate=self.lr_init) # here
         # init transition buffer
         gamma = model_config.getfloat('gamma')
         self._init_trans_buffer(gamma, distance_mask, coop_gamma)
@@ -267,8 +240,9 @@ class MA2C_NC(IA2C):
         if self.max_grad_norm > 0:
             nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
         self.optimizer.step()
-        if self.lr_decay != 'constant':
-            self._update_lr()
+        self.lr_scheduler.step()
+        if summary_writer:
+            summary_writer.add_scalar(f'item/learning_rate', self.optimizer.param_groups[0]['lr'], global_step=global_step)
 
     def forward(self, obs, done, ps, actions=None, out_type='p'): # ps:上一时刻的policy
         if self.identical_agent:

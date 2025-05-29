@@ -99,9 +99,19 @@ Adam
 
 ### MA2C_NC
 baseline:
-![alt text](image_1.png)
+![alt text](image.png)
 
-max_grad_norm = 40 ??
+去掉done,效果超好:
+![alt text](image-1.png)
+
 
 改成 gae+td0. 
 期望的V值:
+
+reward_norm = 2000
+每个step: global_reward = np.mean(reward)(agent层面上). 递增
+tensorboard记录的eposide reward只是对该值再平均。
+
+value_loss基本到0了
+loss/nc_policy_loss ??? 
+期望的是adv大，但是logprob也大

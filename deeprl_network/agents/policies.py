@@ -201,6 +201,8 @@ class NCMultiAgentPolicy(Policy):
         self.entropy_loss = 0
         Rs = torch.from_numpy(Rs).float()
         Advs = torch.from_numpy(Advs).float()
+        if summary_writer:
+            summary_writer.add_scalar(f'item/advantage', Advs.mean(), global_step=global_step)
         for i in range(self.n_agent):
             actor_dist_i = torch.distributions.categorical.Categorical(logits=ps[i])
             policy_loss_i, value_loss_i, entropy_loss_i = \
