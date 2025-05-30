@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import subprocess
 from pdb import set_trace as stx
-
+import shutil
 
 def check_dir(cur_dir):
     if not os.path.exists(cur_dir):
@@ -14,9 +14,10 @@ def check_dir(cur_dir):
     return True
 
 
-def copy_file(src_dir, tar_dir):
-    cmd = 'sudo cp %s %s' % (src_dir, tar_dir)
-    subprocess.check_call(cmd, shell=True)
+def copy_file(src_path, tar_dir):
+    # cmd = 'sudo cp %s %s' % (src_dir, tar_dir)
+    # subprocess.check_call(cmd, shell=True)
+    shutil.copy(src_path, tar_dir)
 
 
 def find_file(cur_dir, suffix='.ini'):
@@ -218,7 +219,7 @@ class Trainer():
                     time.sleep(1)
                     break
 
-                print(f"explore_time: {self.sum1/self.sum0}, backward_time: {self.sum2/self.sum0}")
+                # print(f"explore_time: {self.sum1/self.sum0}, backward_time: {self.sum2/self.sum0}")
 
             rewards = np.array(self.episode_rewards)
             # len(rewards): 720

@@ -64,6 +64,21 @@ class Policy(nn.Module):
         value_loss = (Rs - vs).pow(2).mean() * v_coef
         return policy_loss, value_loss, entropy_loss
 
+    def _run_ppo_loss(self, actor_dist, e_coef, v_coef, vs, As, Rs, Advs, old_log_prob): # here
+        ppo_clip_high = 0.2; ppo_clip_low = 0.2
+
+        log_prob = actor_dist.log_prob(As)
+        ratio = torch.exp(log_prob - old_log_prob)
+        surr1 = ratio * Advs
+        clip_ratio = torch.clamp(ratio, 1.0 - ppo_clip_low, 1.0 + ppo_clip_high)
+        surr2 = clip_ratio * Advs
+        clip_frac = (ratio != clip_ratio).float().mean().item()
+        policy_loss = -torch.min(surr1, surr2).mean()
+        entropy_loss = -(actor_dist.entropy()).mean() * e_coef
+        value_loss = (Rs - vs).pow(2).mean() * v_coef
+
+        return policy_loss, value_loss, entropy_loss, clip_frac
+
     def _update_tensorboard(self, summary_writer, global_step):
         # monitor training
         summary_writer.add_scalar('loss/{}_entropy_loss'.format(self.name), self.entropy_loss,
@@ -74,7 +89,8 @@ class Policy(nn.Module):
                                   global_step=global_step)
         summary_writer.add_scalar('loss/{}_total_loss'.format(self.name), self.loss,
                                   global_step=global_step)
-
+        if hasattr(self, 'clip_frac'):
+            summary_writer.add_scalar(f'item/clip_frac', self.clip_frac, global_step=global_step)
 
 class LstmPolicy(Policy):
     def __init__(self, n_s, n_a, n_n, n_step, n_fc=64, n_lstm=64, name=None,
@@ -185,34 +201,82 @@ class NCMultiAgentPolicy(Policy):
         self._init_net()
         self._reset()
 
-    def backward(self, obs, fps, acts, dones, Rs, Advs,
-                 e_coef, v_coef, summary_writer=None, global_step=None):
+    # def backward(self, obs, fps, acts, dones, Rs, Advs,
+    #              e_coef, v_coef, summary_writer=None, global_step=None):
+    #     obs = torch.from_numpy(obs).float().transpose(0, 1)
+    #     dones = torch.from_numpy(dones).float()
+    #     fps = torch.from_numpy(fps).float().transpose(0, 1)
+    #     acts = torch.from_numpy(acts).long()
+    #     hs, new_states = self._run_comm_layers(obs, dones, fps, self.states_bw)
+    #     # backward grad is limited to the minibatch
+    #     self.states_bw = new_states.detach()
+    #     ps = self._run_actor_heads(hs)
+    #     vs = self._run_critic_heads(hs, acts) # [25, 120, 64], [25, 120] -> 25,120
+    #     self.policy_loss = 0
+    #     self.value_loss = 0
+    #     self.entropy_loss = 0
+    #     Rs = torch.from_numpy(Rs).float()
+    #     Advs = torch.from_numpy(Advs).float()
+    #     if summary_writer:
+    #         summary_writer.add_scalar(f'item/adv', Advs.mean(), global_step=global_step)
+    #     for i in range(self.n_agent):
+    #         actor_dist_i = torch.distributions.categorical.Categorical(logits=ps[i])
+    #         policy_loss_i, value_loss_i, entropy_loss_i = \
+    #             self._run_loss(actor_dist_i, e_coef, v_coef, vs[i],
+    #                 acts[i], Rs[i], Advs[i])
+    #         self.policy_loss += policy_loss_i
+    #         self.value_loss += value_loss_i
+    #         self.entropy_loss += entropy_loss_i
+    #     self.loss = self.policy_loss + self.value_loss + self.entropy_loss
+    #     self.loss.backward()
+    #     if summary_writer is not None:
+    #         self._update_tensorboard(summary_writer, global_step)
+            
+    def ppo_backward(self, obs, fps, acts, dones, Rs, Advs,
+                 e_coef, v_coef, optimizer, summary_writer=None, global_step=None):                
         obs = torch.from_numpy(obs).float().transpose(0, 1)
         dones = torch.from_numpy(dones).float()
         fps = torch.from_numpy(fps).float().transpose(0, 1)
         acts = torch.from_numpy(acts).long()
-        hs, new_states = self._run_comm_layers(obs, dones, fps, self.states_bw)
-        # backward grad is limited to the minibatch
-        self.states_bw = new_states.detach()
-        ps = self._run_actor_heads(hs)
-        vs = self._run_critic_heads(hs, acts) # [25, 120, 64], [25, 120] -> 25,120
-        self.policy_loss = 0
-        self.value_loss = 0
-        self.entropy_loss = 0
+
+        with torch.no_grad():
+            hs, new_states = self._run_comm_layers(obs, dones, fps, self.states_bw)
+            ps = self._run_actor_heads(hs)
         Rs = torch.from_numpy(Rs).float()
-        Advs = torch.from_numpy(Advs).float()
+        Advs = torch.from_numpy(Advs).float() # frozen advantages
         if summary_writer:
             summary_writer.add_scalar(f'item/adv', Advs.mean(), global_step=global_step)
-        for i in range(self.n_agent):
-            actor_dist_i = torch.distributions.categorical.Categorical(logits=ps[i])
-            policy_loss_i, value_loss_i, entropy_loss_i = \
-                self._run_loss(actor_dist_i, e_coef, v_coef, vs[i],
-                    acts[i], Rs[i], Advs[i])
-            self.policy_loss += policy_loss_i
-            self.value_loss += value_loss_i
-            self.entropy_loss += entropy_loss_i
-        self.loss = self.policy_loss + self.value_loss + self.entropy_loss
-        self.loss.backward()
+
+        old_log_probs = [torch.distributions.categorical.Categorical(logits=ps[i]).log_prob(acts[i]) for i in range(self.n_agent)]
+
+        ppo_steps = 2
+        for _ in range(ppo_steps):
+            optimizer.zero_grad()
+            hs, new_states = self._run_comm_layers(obs, dones, fps, self.states_bw)
+            if _ == ppo_steps - 1:
+                self.states_bw = new_states.detach()
+            vs = self._run_critic_heads(hs, acts)
+            ps_new = self._run_actor_heads(hs)
+            
+            self.policy_loss = 0
+            self.value_loss = 0
+            self.entropy_loss = 0
+            self.clip_frac = 0
+            for i in range(self.n_agent):
+                actor_dict = torch.distributions.categorical.Categorical(logits=ps_new[i])
+                policy_loss_i, value_loss_i, entropy_loss_i, clip_frac = \
+                    self._run_ppo_loss(actor_dict, e_coef, v_coef, vs[i], acts[i], Rs[i], Advs[i], old_log_probs[i])
+                self.policy_loss += policy_loss_i
+                self.value_loss += value_loss_i
+                self.entropy_loss += entropy_loss_i
+                self.clip_frac += clip_frac
+            self.loss = self.policy_loss + self.value_loss + self.entropy_loss
+            self.loss.backward()
+
+            nn.utils.clip_grad_norm_(self.parameters(), 40)
+            optimizer.step()
+
+        self.clip_frac /= ppo_steps * self.n_agent
         if summary_writer is not None:
             self._update_tensorboard(summary_writer, global_step)
 
