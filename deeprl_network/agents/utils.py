@@ -23,9 +23,9 @@ layer helpers
 """
 def batch_to_seq(x):
     n_step = x.shape[0]
-    if len(x.shape) == 1:
-        x = torch.unsqueeze(x, -1)
     return torch.chunk(x, n_step)
+    # if len(x.shape) == 1:
+    #     x = torch.unsqueeze(x, -1)
 
 
 def run_rnn(layer, xs, dones, s):
@@ -242,42 +242,18 @@ class MultiAgentOnPolicyBuffer(OnPolicyBuffer): # here
         self.reset(self.dones[-1])
         return obs, policies, acts, dones, Rs, Advs
 
-    # def _add_R_Adv(self, R): # original
-    #     Rs = []
-    #     Advs = []
-    #     vs = np.array(self.vs) # 120,25
-    #     for i in range(vs.shape[1]):
-    #         cur_Rs = []
-    #         cur_Advs = []
-    #         cur_R = R[i]
-    #         for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
-    #             cur_R = r + self.gamma * cur_R * (1.-done)
-    #             cur_Adv = cur_R - v
-    #             cur_Rs.append(cur_R)
-    #             cur_Advs.append(cur_Adv)
-    #         cur_Rs.reverse()
-    #         cur_Advs.reverse()
-    #         Rs.append(cur_Rs)
-    #         Advs.append(cur_Advs)
-    #     self.Rs = np.array(Rs) # 25,120
-    #     self.Advs = np.array(Advs) # 25,120
-
-    def _add_R_Adv(self, last_vs): # TD0
+    def _add_R_Adv(self, R): # original
         Rs = []
         Advs = []
         vs = np.array(self.vs) # 120,25
         for i in range(vs.shape[1]):
             cur_Rs = []
             cur_Advs = []
-            cur_R = last_vs[i]
-            v_next = last_vs[i]
-            for r, v, in zip(self.rs[::-1], vs[::-1,i]):
-                cur_R = r + self.gamma * cur_R
-                TD_target = r + self.gamma * v_next
-                v_next = v                
+            cur_R = R[i]
+            for r, v, done in zip(self.rs[::-1], vs[::-1,i], self.dones[:0:-1]):
+                cur_R = r + self.gamma * cur_R # * (1.-done)
                 cur_Adv = cur_R - v
-                # cur_Rs.append(cur_R)
-                cur_Rs.append(TD_target)
+                cur_Rs.append(cur_R)
                 cur_Advs.append(cur_Adv)
             cur_Rs.reverse()
             cur_Advs.reverse()
@@ -285,7 +261,31 @@ class MultiAgentOnPolicyBuffer(OnPolicyBuffer): # here
             Advs.append(cur_Advs)
         self.Rs = np.array(Rs) # 25,120
         self.Advs = np.array(Advs) # 25,120
-        # print(((vs.T-self.Rs)**2).mean())
+
+    # def _add_R_Adv(self, last_vs): # TD0
+    #     Rs = []
+    #     Advs = []
+    #     vs = np.array(self.vs) # 120,25
+    #     for i in range(vs.shape[1]):
+    #         cur_Rs = []
+    #         cur_Advs = []
+    #         cur_R = last_vs[i]
+    #         v_next = last_vs[i]
+    #         for r, v, in zip(self.rs[::-1], vs[::-1,i]):
+    #             cur_R = r + self.gamma * cur_R
+    #             TD_target = r + self.gamma * v_next
+    #             v_next = v                
+    #             cur_Adv = cur_R - v
+    #             # cur_Rs.append(cur_R)
+    #             cur_Rs.append(TD_target)
+    #             cur_Advs.append(cur_Adv)
+    #         cur_Rs.reverse()
+    #         cur_Advs.reverse()
+    #         Rs.append(cur_Rs)
+    #         Advs.append(cur_Advs)
+    #     self.Rs = np.array(Rs) # 25,120
+    #     self.Advs = np.array(Advs) # 25,120
+    #     # print(((vs.T-self.Rs)**2).mean())
 
     # def _add_R_Adv(self, last_vs): # GAE + TD0
     #     if not hasattr(self, 'gamma'):

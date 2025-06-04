@@ -58,7 +58,7 @@ control_interval_sec：5, 黄灯：2
 
 IA2C优化目标：objective = queue. 怎么算的 ???  
 Intersection delay：objective=wait. coef_wait
-好慢啊。。
+好慢啊。。每次端口不同 ???
 
 
 ### changes
@@ -75,8 +75,7 @@ ob.shape = 25,12
 reward共用。直接global_reward = np.sum(reward)了。
 MA2C实现是整体一个大的actor、critic. 但具体还是给每个agent配置参数。
 感觉不出MARL共用参数在哪。。。
-扩大batch_size和采样长度 ??
-
+finger_print: 上一次action.
 
 baseline:
 ![alt text](image.png)
@@ -84,6 +83,7 @@ baseline:
 去掉done,效果超好:
 ![alt text](image-1.png)
 
+原先是类似N-step return。
 改成 gae+td0. 
 朴素的用折扣回报同时作为V_target和Q却能训 ??
 
@@ -91,7 +91,11 @@ baseline:
 也很不错
 ![alt text](image-2.png)
 
-Adam不行，RMScrop行 ???
+bad_PPO:
+![alt text](image-3.png)
+
+
+Adam不行，RMScrop行：
 Adam 的自适应学习率问题 (尤其是在 RL 中):
 历史梯度的累积问题： Adam 通过计算梯度的指数移动平均（一阶矩 m 和二阶矩 v）来自适应地调整学习率。在 RL 训练中，特别是对于策略梯度方法（如 REINFORCE, A2C, PPO），梯度通常具有高方差和非稳态的特性。
 高方差意味着单个批次的梯度可能很不稳定。
@@ -105,8 +109,7 @@ RMSprop 的特性：
 RL 的梯度通常有高方差，尤其是在早期探索阶段。价值函数（基线）的估计质量直接影响优势函数 Adv 的方差。
 如果 Adam 对这种高方差梯度更敏感，可能导致其更新方向不稳定。而 RMSprop 可能会以某种方式（例如，对过去梯度的记忆更短）更好地处理这种不稳定性。
 
-
-训练时：np.random.choice(np.arange(len(pi)), p=pi)。on-policy, 能否温度之类 ??
+训练时：np.random.choice(np.arange(len(pi)), p=pi)。on-policy, 能否温度之类 
 
 reward_norm = 2000
 每个step: global_reward = np.mean(reward)(agent层面上). 递增
@@ -118,10 +121,24 @@ loss/nc_policy_loss ???
 
 不同机子上速度严重不同。
 
-测step时间。
+测step时间：
+  phase_yellow    : 0.0177 seconds
+  phase_green     : 0.0196 seconds
+  get_state       : 0.0182 seconds
+  measure_reward  : 0.0162 seconds
+没啥办法。。
+
 MAPPO。理应CTDE。
 现在critic没问题，但actor依赖lstm的hs.
 另训actor lstm较好，只接受局部输入。
+扩大batch_size和采样长度。
+
+Adv归一化：
+促进探索与收敛的平衡：
+在训练初期，当策略还在探索时，Rs（回报）和 vs（价值预测）可能都比较低，导致 Advs 也很小。如果不归一化，策略几乎得不到有效的学习信号，无法改变其行为。
+通过归一化，即使 Advs 的原始值都很小，它们之间的相对大小关系依然被放大，从而为策略提供足够的“推力”来探索和改进，直到找到更高奖励的区域。
+
+test结果。
 
 ###
 python3 main.py train --config-dir config/config_ia2c_grid.ini 

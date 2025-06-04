@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 from agents.utils import OnPolicyBuffer, MultiAgentOnPolicyBuffer, Scheduler, get_optimizer_cosine_warmup_scheduler
 from agents.policies import (LstmPolicy, FPPolicy, ConsensusPolicy, NCMultiAgentPolicy,
-                             CommNetMultiAgentPolicy, DIALMultiAgentPolicy)
+                             CommNetMultiAgentPolicy, DIALMultiAgentPolicy, IC3NetMultiAgentPolicy)
 import logging
 import numpy as np
 from pdb import set_trace as stx
@@ -327,3 +327,50 @@ class MA2C_DIAL(MA2C_NC):
             return DIALMultiAgentPolicy(self.n_s, self.n_a, self.n_agent, self.n_step,
                                         self.neighbor_mask, n_fc=self.n_fc, n_h=self.n_lstm,
                                         n_s_ls=self.n_s_ls, n_a_ls=self.n_a_ls, identical=False)
+
+
+class IC3Net(IA2C):
+    def __init__(self, n_s_ls, n_a_ls, neighbor_mask, distance_mask, coop_gamma,
+                 total_step, model_config, seed=0,  use_gpu=False):
+        self.name = 'ic3net'
+        self._init_algo(n_s_ls, n_a_ls, neighbor_mask, distance_mask, coop_gamma,
+                        total_step, seed, use_gpu, model_config)
+
+    def add_transition(self, ob, p, action, reward, value, done): # p: naction
+        if self.reward_norm > 0:
+            reward = reward / self.reward_norm
+        if self.reward_clip > 0:
+            reward = np.clip(reward, -self.reward_clip, self.reward_clip)
+        self.trans_buffer.add_transition(np.array(ob), np.array(p), action, reward, value, done)
+
+    def backward(self, Rends, dt, summary_writer=None, global_step=None):
+        self.optimizer.zero_grad()
+        obs, ps, acts, dones, Rs, Advs = self.trans_buffer.sample_transition(Rends, dt)
+        self.policy.backward(obs, ps, acts, dones, Rs, Advs, self.e_coef, self.v_coef,
+                             summary_writer=summary_writer, global_step=global_step)
+        if self.max_grad_norm > 0:
+            nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+        self.optimizer.step()
+        if summary_writer:
+            summary_writer.add_scalar(f'item/learning_rate', self.optimizer.param_groups[0]['lr'], global_step=global_step)
+
+    def forward(self, obs, done, ps, actions=None, out_type='p'): # ps:上一时刻的policy
+        return self.policy.forward(np.array(obs), done, np.array(ps), actions, out_type)
+
+    def reset(self):
+        self.policy._reset()
+
+    def _convert_hetero_states(self, ob, p):
+        pad_ob = np.zeros((self.n_agent, self.n_s))
+        pad_p = np.zeros((self.n_agent, self.n_a))
+        for i in range(self.n_agent):
+            pad_ob[i, :len(ob[i])] = ob[i]
+            pad_p[i, :len(p[i])] = p[i]
+        return pad_ob, pad_p
+
+    def _init_policy(self):
+        return IC3NetMultiAgentPolicy(self.n_s, self.n_a, self.n_agent, self.n_step,
+                                        n_fc=self.n_fc, n_h=self.n_lstm)
+
+    def _init_trans_buffer(self, gamma, distance_mask, coop_gamma):
+        self.trans_buffer = MultiAgentOnPolicyBuffer(gamma, coop_gamma, distance_mask)

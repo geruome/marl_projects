@@ -201,36 +201,36 @@ class NCMultiAgentPolicy(Policy):
         self._init_net()
         self._reset()
 
-    # def backward(self, obs, fps, acts, dones, Rs, Advs,
-    #              e_coef, v_coef, summary_writer=None, global_step=None):
-    #     obs = torch.from_numpy(obs).float().transpose(0, 1)
-    #     dones = torch.from_numpy(dones).float()
-    #     fps = torch.from_numpy(fps).float().transpose(0, 1)
-    #     acts = torch.from_numpy(acts).long()
-    #     hs, new_states = self._run_comm_layers(obs, dones, fps, self.states_bw)
-    #     # backward grad is limited to the minibatch
-    #     self.states_bw = new_states.detach()
-    #     ps = self._run_actor_heads(hs)
-    #     vs = self._run_critic_heads(hs, acts) # [25, 120, 64], [25, 120] -> 25,120
-    #     self.policy_loss = 0
-    #     self.value_loss = 0
-    #     self.entropy_loss = 0
-    #     Rs = torch.from_numpy(Rs).float()
-    #     Advs = torch.from_numpy(Advs).float()
-    #     if summary_writer:
-    #         summary_writer.add_scalar(f'item/adv', Advs.mean(), global_step=global_step)
-    #     for i in range(self.n_agent):
-    #         actor_dist_i = torch.distributions.categorical.Categorical(logits=ps[i])
-    #         policy_loss_i, value_loss_i, entropy_loss_i = \
-    #             self._run_loss(actor_dist_i, e_coef, v_coef, vs[i],
-    #                 acts[i], Rs[i], Advs[i])
-    #         self.policy_loss += policy_loss_i
-    #         self.value_loss += value_loss_i
-    #         self.entropy_loss += entropy_loss_i
-    #     self.loss = self.policy_loss + self.value_loss + self.entropy_loss
-    #     self.loss.backward()
-    #     if summary_writer is not None:
-    #         self._update_tensorboard(summary_writer, global_step)
+    def backward(self, obs, fps, acts, dones, Rs, Advs,
+                 e_coef, v_coef, summary_writer=None, global_step=None):
+        obs = torch.from_numpy(obs).float().transpose(0, 1)
+        dones = torch.from_numpy(dones).float()
+        fps = torch.from_numpy(fps).float().transpose(0, 1)
+        acts = torch.from_numpy(acts).long()
+        hs, new_states = self._run_comm_layers(obs, dones, fps, self.states_bw)
+        # backward grad is limited to the minibatch
+        self.states_bw = new_states.detach()
+        ps = self._run_actor_heads(hs)
+        vs = self._run_critic_heads(hs, acts) # [25, 120, 64], [25, 120] -> 25,120
+        self.policy_loss = 0
+        self.value_loss = 0
+        self.entropy_loss = 0
+        Rs = torch.from_numpy(Rs).float()
+        Advs = torch.from_numpy(Advs).float()
+        if summary_writer:
+            summary_writer.add_scalar(f'item/adv', Advs.mean(), global_step=global_step)
+        for i in range(self.n_agent):
+            actor_dist_i = torch.distributions.categorical.Categorical(logits=ps[i])
+            policy_loss_i, value_loss_i, entropy_loss_i = \
+                self._run_loss(actor_dist_i, e_coef, v_coef, vs[i],
+                    acts[i], Rs[i], Advs[i])
+            self.policy_loss += policy_loss_i
+            self.value_loss += value_loss_i
+            self.entropy_loss += entropy_loss_i
+        self.loss = self.policy_loss + self.value_loss + self.entropy_loss
+        self.loss.backward()
+        if summary_writer is not None:
+            self._update_tensorboard(summary_writer, global_step)
             
     def ppo_backward(self, obs, fps, acts, dones, Rs, Advs,
                  e_coef, v_coef, optimizer, summary_writer=None, global_step=None):                
@@ -247,6 +247,7 @@ class NCMultiAgentPolicy(Policy):
         if summary_writer:
             summary_writer.add_scalar(f'item/adv', Advs.mean(), global_step=global_step)
 
+        Advs = (Advs - Advs.mean()) / (Advs.std() + 1e-8)
         old_log_probs = [torch.distributions.categorical.Categorical(logits=ps[i]).log_prob(acts[i]) for i in range(self.n_agent)]
 
         ppo_steps = 2
@@ -281,11 +282,11 @@ class NCMultiAgentPolicy(Policy):
             self._update_tensorboard(summary_writer, global_step)
 
     def forward(self, ob, done, fp, action=None, out_type='p'):
-        # TxNxm
-        ob = torch.from_numpy(np.expand_dims(ob, axis=0)).float()
-        done = torch.from_numpy(np.expand_dims(done, axis=0)).float()
-        fp = torch.from_numpy(np.expand_dims(fp, axis=0)).float()
-        # h dim: NxTxm
+        # BxNxm
+        ob = torch.from_numpy(np.expand_dims(ob, axis=0)).float() # [1,25,12]
+        done = torch.from_numpy(np.expand_dims(done, axis=0)).float() # [1]
+        fp = torch.from_numpy(np.expand_dims(fp, axis=0)).float() # [1,25,5]
+        # h dim: NxBxm
         h, new_states = self._run_comm_layers(ob, done, fp, self.states_fw)
         if out_type.startswith('p'):
             self.states_fw = new_states.detach()
@@ -444,7 +445,7 @@ class NCMultiAgentPolicy(Policy):
             else:
                 vs.append(v_i)
         return vs
-
+  
 
 class ConsensusPolicy(NCMultiAgentPolicy):
     def __init__(self, n_s, n_a, n_agent, n_step, neighbor_mask, n_fc=64, n_h=64,
@@ -606,3 +607,228 @@ class DIALMultiAgentPolicy(NCMultiAgentPolicy):
         a_i = one_hot(p[i].argmax().unsqueeze(0), self.n_fc)
         return F.relu(self.fc_x_layers[i](torch.cat([x[i].unsqueeze(0), nx_i], dim=1))) + \
                F.relu(self.fc_m_layers[i](m_i)) + a_i
+
+
+class IC3NetMultiAgentPolicy(Policy):
+    """
+    IC3Net Multi-Agent Policy.
+    This implementation focuses on global information and a gating mechanism,
+    removing direct neighbor-to-neighbor communication.
+    """
+    def __init__(self, n_s, n_a, n_agent, n_step, n_fc=64, n_h=64,
+                 n_s_ls=None, n_a_ls=None, identical=True):
+        super(IC3NetMultiAgentPolicy, self).__init__(n_a, n_s, n_step, 'ic3net', None, identical)
+        if not self.identical:
+            self.n_s_ls = n_s_ls
+            self.n_a_ls = n_a_ls
+
+        self.n_agent = n_agent
+        self.n_fc = n_fc
+        self.n_h = n_h
+        self._init_net()
+        self._reset()
+
+    def backward(self, obs, fps, acts, dones, Rs, Advs,
+                 e_coef, v_coef, summary_writer=None, global_step=None):
+        obs = torch.from_numpy(obs).float().transpose(0, 1)
+        fps = torch.from_numpy(fps).float().transpose(0, 1)
+        acts = torch.from_numpy(acts).long()
+        
+        hs, new_states = self._run_comm_layers(obs, fps, self.states_bw)
+        self.states_bw = new_states.detach()
+
+        ps = self._run_actor_heads(hs)
+        vs = self._run_critic_heads(hs, acts)
+
+        self.policy_loss = 0
+        self.value_loss = 0
+        self.entropy_loss = 0
+        Rs = torch.from_numpy(Rs).float()
+        Advs = torch.from_numpy(Advs).float()
+
+        if summary_writer:
+            summary_writer.add_scalar(f'item/adv', Advs.mean(), global_step=global_step)
+
+        for i in range(self.n_agent):
+            actor_dist_i = torch.distributions.categorical.Categorical(logits=ps[i])
+            policy_loss_i, value_loss_i, entropy_loss_i = \
+                self._run_loss(actor_dist_i, e_coef, v_coef, vs[i],
+                               acts[i], Rs[i], Advs[i])
+            self.policy_loss += policy_loss_i
+            self.value_loss += value_loss_i
+            self.entropy_loss += entropy_loss_i
+
+        self.loss = self.policy_loss + self.value_loss + self.entropy_loss
+        self.loss.backward()
+        if summary_writer is not None:
+            self._update_tensorboard(summary_writer, global_step)
+
+    def forward(self, ob, done, fp, action=None, out_type='p'):
+        ob = torch.from_numpy(np.expand_dims(ob, axis=0)).float()
+        fp = torch.from_numpy(np.expand_dims(fp, axis=0)).float()
+
+        h, new_states = self._run_comm_layers(ob, fp, self.states_fw)
+        if out_type.startswith('p'):
+            self.states_fw = new_states.detach()
+            return self._run_actor_heads(h, detach=True)
+        else:
+            action = torch.from_numpy(np.expand_dims(action, axis=1)).long()
+            return self._run_critic_heads(h, action, detach=True)
+
+    def _get_comm_input_dim(self, i_agent):
+        if self.identical:
+            obs_input_dim = self.n_s
+        else:
+            obs_input_dim = self.n_s_ls[i_agent]
+
+        lstm_input_dim = self.n_fc + self.n_h
+        return obs_input_dim, lstm_input_dim
+
+    def _init_actor_head(self, n_a):
+        actor_head = nn.Linear(self.n_h, n_a)
+        init_layer(actor_head, 'fc')
+        self.actor_heads.append(actor_head)
+
+    def _init_comm_layer(self, obs_input_dim, lstm_input_dim):
+        fc_x_layer = nn.Linear(obs_input_dim, self.n_fc)
+        init_layer(fc_x_layer, 'fc')
+        self.fc_x_layers.append(fc_x_layer)
+
+        # Communication Gate for the *incoming* global message (remains the same)
+        gate_layer = nn.Linear(self.n_h, 1)
+        init_layer(gate_layer, 'fc')
+        self.gate_layers.append(gate_layer)
+
+        lstm_layer = nn.LSTMCell(lstm_input_dim, self.n_h)
+        init_layer(lstm_layer, 'lstm')
+        self.lstm_layers.append(lstm_layer)
+
+    def _init_critic_head(self, n_a_agent):
+        critic_head = nn.Linear(self.n_h + n_a_agent, 1)
+        init_layer(critic_head, 'fc')
+        self.critic_heads.append(critic_head)
+
+    def _init_net(self):
+        self.fc_x_layers = nn.ModuleList()
+        self.gate_layers = nn.ModuleList() # Gate for *incoming* global message
+        self.lstm_layers = nn.ModuleList()
+        self.actor_heads = nn.ModuleList()
+        self.critic_heads = nn.ModuleList()
+
+        # NEW: Gate layers for *outgoing* information contribution to global pool
+        self.contrib_gate_layers = nn.ModuleList()
+
+        # Calculate initial total contribution dim for a single agent: n_h + n_a
+        # This assumes identical agents for this calculation; if not, you'd iterate n_a_ls[i]
+        total_contrib_dim_per_agent = self.n_h + self.n_a
+
+        # Global Message Layer: aggregates *gated contributions* from all agents
+        # Input: N_agents * (n_h + n_a)
+        self.global_message_layer = nn.Linear(self.n_agent * total_contrib_dim_per_agent, self.n_h)
+        init_layer(self.global_message_layer, 'fc')
+
+        for i in range(self.n_agent):
+            obs_input_dim, lstm_input_dim = self._get_comm_input_dim(i)
+            self._init_comm_layer(obs_input_dim, lstm_input_dim)
+
+            # Initialize gate for outgoing contribution for agent i
+            # Input to this gate is the concatenated (fingerprint + h)
+            contrib_gate_layer = nn.Linear(total_contrib_dim_per_agent, 1)
+            init_layer(contrib_gate_layer, 'fc')
+            self.contrib_gate_layers.append(contrib_gate_layer)
+
+            n_a_agent = self.n_a if self.identical else self.n_a_ls[i]
+            self._init_actor_head(n_a_agent)
+            self._init_critic_head(n_a_agent)
+
+    def _reset(self):
+        self.states_fw = torch.zeros(self.n_agent, self.n_h * 2)
+        self.states_bw = torch.zeros(self.n_agent, self.n_h * 2)
+
+    def _run_actor_heads(self, hs, detach=False):
+        ps = []
+        for i in range(self.n_agent):
+            if detach:
+                p_i = F.softmax(self.actor_heads[i](hs[i]), dim=1).squeeze().detach().numpy()
+            else:
+                p_i = F.log_softmax(self.actor_heads[i](hs[i]), dim=1)
+            ps.append(p_i)
+        return ps
+
+    def _run_comm_layers(self, obs, fps, states):
+        h, c = torch.chunk(states, 2, dim=1) # [25,64]
+
+        outputs = []
+        for t in range(obs.shape[0]):
+            x_t = obs[t].squeeze(0)
+            p_t = fps[t].squeeze(0) # Fingerprint at current time step (action from prev time step)
+
+            next_h = []
+            next_c = []
+
+            # --- NEW: Collect gated contributions from all agents for global message ---
+            gated_agent_contributions = []
+            for i in range(self.n_agent):
+                # Concatenate current fingerprint (p_t[i]) and hidden state (h[i])
+                # Ensure fingerprint is properly shaped if it's not already (1, n_a)
+                # p_t[i] is (n_a), h[i] is (n_h)
+                # Assuming p_t[i] is already one-hot or appropriate (e.g. from previous action)
+                
+                # If fingerprints are not one-hot, make sure they are before concatenation
+                # Or ensure self.n_a matches the actual dimension of the raw fingerprint
+                combined_info = torch.cat([p_t[i], h[i]], dim=0).unsqueeze(0) # (1, n_a + n_h)
+
+
+                # Get the gate output for this agent's contribution to the global pool
+                contrib_gate_output = torch.sigmoid(self.contrib_gate_layers[i](combined_info)) # (1, 1) ??
+
+                # Apply the gate to the combined info
+                gated_contrib = combined_info * contrib_gate_output # (1, n_a + n_h)
+                gated_agent_contributions.append(gated_contrib)
+
+            # Concatenate all gated contributions to form the input for global_message_layer
+            all_gated_contributions = torch.cat(gated_agent_contributions, dim=1) # (1, N_agents * (n_a + n_h))
+
+            # Generate the global message from these gated contributions
+            global_message = F.relu(self.global_message_layer(all_gated_contributions)) # (1, n_h) ??
+
+            # --- Original IC3Net logic for processing individual agent inputs ---
+            for i in range(self.n_agent):
+                x_i = x_t[i].unsqueeze(0)
+
+                fc_x_output = F.relu(self.fc_x_layers[i](x_i))
+
+                # Gate for incoming global message (remains the same)
+                gate_output = torch.sigmoid(self.gate_layers[i](h[i].unsqueeze(0))) # 从全局信息中获取信息时使用的门 ??
+                gated_global_message = global_message * gate_output
+
+                lstm_input_i = torch.cat([fc_x_output, gated_global_message], dim=1)
+
+                h_i, c_i = h[i].unsqueeze(0), c[i].unsqueeze(0)
+                next_h_i, next_c_i = self.lstm_layers[i](lstm_input_i, (h_i, c_i))
+                next_h.append(next_h_i)
+                next_c.append(next_c_i)
+
+            h, c = torch.cat(next_h), torch.cat(next_c)
+            outputs.append(h.unsqueeze(0))
+
+        outputs = torch.cat(outputs)
+        return outputs.transpose(0, 1), torch.cat([h, c], dim=1)
+
+    def _run_critic_heads(self, hs, actions, detach=False):
+        vs = []
+        for i in range(self.n_agent):
+            h_i_agent = hs[i]
+            actions_i_agent = actions[i]
+            n_a_agent = self.n_a if self.identical else self.n_a_ls[i]
+            agent_actions_one_hot = one_hot(actions_i_agent, n_a_agent)
+
+            h_i_critic_input = torch.cat([h_i_agent, agent_actions_one_hot], dim=1)
+
+            v_i = self.critic_heads[i](h_i_critic_input).squeeze()
+
+            if detach:
+                vs.append(v_i.detach().numpy())
+            else:
+                vs.append(v_i)
+        return vs

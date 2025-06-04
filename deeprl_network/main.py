@@ -11,7 +11,7 @@ from torch.utils.tensorboard.writer import SummaryWriter
 from envs.cacc_env import CACCEnv
 from envs.large_grid_env import LargeGridEnv
 from envs.real_net_env import RealNetEnv
-from agents.models import IA2C, IA2C_FP, MA2C_NC, IA2C_CU, MA2C_CNET, MA2C_DIAL
+from agents.models import IA2C, IA2C_FP, MA2C_NC, IA2C_CU, MA2C_CNET, MA2C_DIAL, IC3Net
 from utils import (Counter, Trainer, Tester, Evaluator,
                    check_dir, copy_file, find_file,
                    init_dir, init_log, init_test_flag)
@@ -21,8 +21,8 @@ from pdb import set_trace as stx
 
 
 def parse_args():
-    default_config_dir = 'config/config_ma2c_nc_grid.ini'
-    # 'config/config_ia2c_grid.ini'
+    default_config_dir = 'config/config_ma2c_nc_grid_hybrid.ini'
+    # 'config_ia2c_grid.ini', 'config_ma2c_nc_grid.ini', 'config_ic3net_grid.ini' 'config_ma2c_nc_grid_hybrid.ini'
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='option', help="train or evaluate")
     sp = subparsers.add_parser('train', help='train a single agent under base dir')
@@ -71,6 +71,9 @@ def init_agent(env, config, total_step, seed):
     elif env.agent == 'ma2c_dial':
         return MA2C_DIAL(env.n_s_ls, env.n_a_ls, env.neighbor_mask, env.distance_mask, env.coop_gamma,
                          total_step, config, seed=seed)
+    elif env.agent == 'ma2c_ic3net':
+        return IC3Net(env.n_s_ls, env.n_a_ls, env.neighbor_mask, env.distance_mask, env.coop_gamma,
+                         total_step, config, seed=seed)
     else:
         return None
 
@@ -97,7 +100,7 @@ def train(args):
     # init centralized or multi agent
     seed = config.getint('ENV_CONFIG', 'seed')
     model = init_agent(env, config['MODEL_CONFIG'], total_step, seed)
-    # model.load(file_path='expe/20250529_131124/model/checkpoint-250000.pt')
+    # model.load(file_path='expe/0601_1529/model/checkpoint-1000080.pt')
     # model.load(dirs['model'], train_mode=True)
         
     # disable multi-threading for safe SUMO implementation
