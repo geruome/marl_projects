@@ -92,6 +92,7 @@ class Policy(nn.Module):
         if hasattr(self, 'clip_frac'):
             summary_writer.add_scalar(f'item/clip_frac', self.clip_frac, global_step=global_step)
 
+
 class LstmPolicy(Policy):
     def __init__(self, n_s, n_a, n_n, n_step, n_fc=64, n_lstm=64, name=None,
                  na_dim_ls=None, identical=True):
@@ -250,7 +251,7 @@ class NCMultiAgentPolicy(Policy):
         Advs = (Advs - Advs.mean()) / (Advs.std() + 1e-8)
         old_log_probs = [torch.distributions.categorical.Categorical(logits=ps[i]).log_prob(acts[i]) for i in range(self.n_agent)]
 
-        ppo_steps = 2
+        ppo_steps = 4
         for _ in range(ppo_steps):
             optimizer.zero_grad()
             hs, new_states = self._run_comm_layers(obs, dones, fps, self.states_bw)

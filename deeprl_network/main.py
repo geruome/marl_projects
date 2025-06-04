@@ -114,17 +114,15 @@ def train(args):
     summary_writer.close()
 
 
-def evaluate_fn(agent_dir, output_dir, seeds, port, demo):
-    agent = agent_dir.split('/')[-1]
-    if not check_dir(agent_dir):
-        logging.error('Evaluation: %s does not exist!' % agent)
-        return
-    # load config file 
-    config_dir = find_file(agent_dir + '/data/')
-    if not config_dir:
-        return
+def evaluate_fn(expe_dir, output_dir, seeds, port, demo=False):
+    config_dir = args.config_dir
     config = configparser.ConfigParser()
     config.read(config_dir)
+
+    # dirs = init_dir(expe_dir)
+    os.makedirs(expe_dir, exist_ok=True)
+    copy_file(config_dir, expe_dir)
+    open(os.path.join(expe_dir, args.model_path.split('/')[1]), 'w').write('Hello, this is my file.\n')
 
     # init env
     env = init_env(config['ENV_CONFIG'], port=port)
@@ -132,32 +130,22 @@ def evaluate_fn(agent_dir, output_dir, seeds, port, demo):
 
     # load model for agent
     model = init_agent(env, config['MODEL_CONFIG'], 0, 0)
-    if model is None:
-        return
-    model_dir = agent_dir + '/model/'
-    if not model.load(model_dir):
-        return
+    model.load(args.model_path)
     # collect evaluation data
     evaluator = Evaluator(env, model, output_dir, gui=demo)
     evaluator.run()
 
 
 def evaluate(args):
-    base_dir = args.base_dir
-    if not args.demo:
-        dirs = init_dir(base_dir, pathes=['eva_data', 'eva_log'])
-        init_log(dirs['eva_log'])
-        output_dir = dirs['eva_data']
-    else:
-        output_dir = None
+    args.config_dir = 'config/config_ma2c_nc_grid_hybrid.ini'
+    args.model_path = 'expe/0603_1720_hybrid/model/checkpoint-1000000.pt' 
+    # 'expe/0530_2009_ppo/0602_1001/model/checkpoint-800000.pt'
+    base_dir = os.path.join('expe', time.strftime('%m%d_%H%M', time.localtime()) + '_eval/')
     # enforce the same evaluation seeds across agents
     seeds = args.evaluation_seeds
     logging.info('Evaluation: random seeds: %s' % seeds)
-    if not seeds:
-        seeds = []
-    else:
-        seeds = [int(s) for s in seeds.split(',')]
-    evaluate_fn(base_dir, output_dir, seeds, 1, args.demo)
+    seeds = [int(s) for s in seeds.split(',')]
+    evaluate_fn(base_dir, base_dir, seeds, 8888, )
 
 
 if __name__ == '__main__':

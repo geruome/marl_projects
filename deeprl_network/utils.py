@@ -193,12 +193,42 @@ class Trainer():
         R = self._get_value(ob, done, action)
         return ob, end, R
 
+    def perform(self, test_ind, gui=False):
+        ob = self.env.reset(gui=gui, test_ind=test_ind)
+        rewards = []
+        # note this done is pre-decision to reset LSTM states!
+        done = True
+        self.model.reset()
+        self.cur_step = 0
+        while True:
+            self.cur_step += 1
+            if self.agent == 'greedy':
+                action = self.model.forward(ob)
+            else:
+                # in on-policy learning, test policy has to be stochastic
+                if self.env.name.startswith('atsc'):
+                    policy, action = self._get_policy(ob, done)
+                else:
+                    assert 0
+                self.env.update_fingerprint(policy)
+            next_ob, reward, done, global_reward = self.env.step(action)
+            rewards.append(global_reward)
+            if done:
+                break
+            ob = next_ob
+            if self.cur_step % 120 == 0:
+                print(self.cur_step, global_reward, done)
+
+        mean_reward = np.mean(np.array(rewards))
+        std_reward = np.std(np.array(rewards))
+        return mean_reward, std_reward
+
     def run(self):
         while not self.global_counter.should_stop():
             # np.random.seed(self.env.seed)
             ob = self.env.reset()
             # note this done is pre-decision to reset LSTM states!
-            done = True # ??
+            done = True # ??0
             self.model.reset()
             self.cur_step = 0
             self.episode_rewards = []
@@ -287,7 +317,8 @@ class Evaluator(Tester):
         self.model = model
         self.agent = self.env.agent
         self.env.train_mode = False
-        self.test_num = self.env.test_num
+        # self.test_num = self.env.test_num # 50 ??
+        self.test_num = 1
         self.output_path = output_path
         self.gui = gui
 
@@ -304,6 +335,6 @@ class Evaluator(Tester):
             reward, _ = self.perform(test_ind, gui=self.gui)
             self.env.terminate()
             logging.info('test %i, avg reward %.2f' % (test_ind, reward))
-            time.sleep(2)
+            time.sleep(1)
             self.env.collect_tripinfo()
         self.env.output_data()

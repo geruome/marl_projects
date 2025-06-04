@@ -65,7 +65,8 @@ class IA2C:
         checkpoint = torch.load(file_path)
         logging.info('Checkpoint loaded: {}'.format(file_path))
         self.policy.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if hasattr(self, 'optimizer'):
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.policy.train()
 
     def reset(self):
