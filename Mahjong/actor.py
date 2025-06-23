@@ -58,7 +58,7 @@ class Actor(Process):
                 # each player take action
                 actions = {}
                 values = {}
-                # assert len(obs)==4 
+                assert len(obs) in [1,3]
                 for agent_name in obs:
                     agent_data = episode_data[agent_name]
                     state = obs[agent_name]
@@ -84,8 +84,11 @@ class Actor(Process):
                 obs = next_obs
             
             # print('----------', rewards); exit(0)
+            if all(value == 0 for value in rewards.values()):
+                episode -= 1
+                continue
             print(self.name, 'Episode', episode, 'Model', latest['id'], 'Reward', rewards, flush=True)
-            
+
             # postprocessing episode data for each agent
             for agent_name, agent_data in episode_data.items():
                 if len(agent_data['action']) < len(agent_data['reward']):

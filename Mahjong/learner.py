@@ -32,6 +32,7 @@ class Learner(Process):
         
         # wait for initial samples
         while self.replay_buffer.size() < self.config['min_sample']:
+            # print(self.replay_buffer.size(), '-----------')
             time.sleep(0.1)
         
         cur_time = time.time()
@@ -49,7 +50,7 @@ class Learner(Process):
             advs = torch.tensor(batch['adv']).to(device)
             targets = torch.tensor(batch['target']).to(device)
             
-            print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
+            # print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
             
             # calculate PPO loss
             model.train(True) # Batch Norm training mode

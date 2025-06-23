@@ -38,3 +38,7 @@ class CNNModel(nn.Module):
         masked_logits = logits + inf_mask
         value = self._value_branch(hidden)
         return masked_logits, value
+    
+
+# class MyModel(nn.Module):
+    

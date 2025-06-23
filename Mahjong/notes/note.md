@@ -4,11 +4,9 @@
 特征提取。单人尽快胡 + 不让对手胡（不点炮）。
 凑番数 + 尽快胡。
 
-
 自己创建房间比赛。
 小组比赛。
 本地不同agent ???
-
 
 episodes_per_actor = 1000 完之后就结束了。一堆报错不用管。
 
@@ -16,8 +14,22 @@ reward全0是不是没一点用 ??
 
 235个动作。action_mask = pass1+hu1+discard34+chi63(3*7*3)+peng34+gang34+angang34+bugang34
 
-state: 144张牌
+state: 34种牌0-4即可, 却要 6 * 4 * 9. 
 
+
+简化state. (好像也不是很需要简化)
+<!-- state添加牌池等信息。 但只考虑hand就差不多够了-->
+训一个只靠自己接牌的model，作为baseline。
+
+告诉agent每个操作后的state。
+model只要value model. action e-greedy.
+
+reward：番数(不胡牌没番，怎么办) + 胡牌快慢
+番数作为中间参考。
+
+MahjongFanCalculator 不胡牌就报错。
+<!-- 单人 -> 多人：
+非自己轮次(13张牌)时的操作。告诉agent吃/碰/杠等操作后的state.  -->
 
 
 ##

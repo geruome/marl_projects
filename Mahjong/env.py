@@ -9,6 +9,7 @@ except:
     print('MahjongGB library required! Please visit https://github.com/ailab-pku/PyMahjongGB for more information.')
     raise
 from pdb import set_trace as stx
+import numpy as np
 
 
 class Error(Exception):
@@ -20,7 +21,7 @@ class MahjongGBEnv():
     
     def __init__(self, config):
         assert 'agent_clz' in config, "must specify agent_clz to process features!"
-        self.agentclz = config['agent_clz']
+        self.agentclz = config['agent_clz'] 
         assert issubclass(self.agentclz, MahjongGBAgent), "ageng_clz must be a subclass of MahjongGBAgent!"
         self.duplicate = config.get('duplicate', True)
         self.variety = config.get('variety', -1)
@@ -31,7 +32,7 @@ class MahjongGBEnv():
     
     def reset(self, prevalentWind = -1, tileWall = ''):
         # Create agents to process features
-        self.agents = [self.agentclz(i) for i in range(4)]
+        self.agents = [self.agentclz(i) for i in range(4)] # here
         self.reward = None
         self.done = False
         # Init random seed
@@ -181,7 +182,7 @@ class MahjongGBEnv():
         self.drawAboutKong = False
         self._draw(self.curPlayer)
     
-    def _draw(self, player):
+    def _draw(self, player): # 摸牌
         tile = self._drawTile(player)
         self.myWallLast = not self._canDrawTile(player)
         self.wallLast = not self._canDrawTile((player + 1) % 4)
@@ -191,10 +192,10 @@ class MahjongGBEnv():
         self.curTile = tile
         for i in range(4):
             if i != player:
-                self.agents[i].request2obs('Player %d Draw' % player)
-        self.obs = {player : self.agents[player].request2obs('Draw %s' % tile)}
+                self.agents[i].request2obs('Player %d Draw' % player) # 其他player
+        self.obs = {player : self.agents[player].request2obs('Draw %s' % tile)} # 当前player
     
-    def _discard(self, player, tile):
+    def _discard(self, player, tile): # 弃牌,等待响应。
         if tile not in self.hands[player]: raise Error(player)
         self.hands[player].remove(tile)
         self.shownTiles[tile] += 1
@@ -287,6 +288,7 @@ class MahjongGBEnv():
         self.obs = {i : self.agents[i].request2obs('Player %d BuGang %s' % (player, tile)) for i in range(4) if i != player}
     
     def _checkMahjong(self, player, isSelfDrawn = False, isAboutKong = False):
+        # print('-----------------------')
         try:
             fans = MahjongFanCalculator(
                 pack = tuple(self.packs[player]),
@@ -322,8 +324,20 @@ if __name__ == '__main__':
     from feature import FeatureAgent
     env = MahjongGBEnv(config = {'agent_clz': FeatureAgent})
     obs = env.reset() 
-    obs1 = obs['player_1'] # 'observation', 'action_mask'
-    print(obs)
-    stx()
-    for _ in range(100):
-        
+    # obs1 = obs['player_1'] # 'observation', 'action_mask'
+    done = False
+    while not done:
+        # print(obs) # 相邻两个step：(当前player, 其他三个player)
+        actions = {}
+        for agent_name in obs:
+            print(agent_name)
+            arr = obs[agent_name]['action_mask']
+            indices = np.where(arr == 1)[0]
+            # print(indices, type(indices))
+            assert indices.size > 0
+            action = random.choice(indices).item()
+            actions[agent_name] = action
+            # stx()
+        next_obs, rewards, done = env.step(actions)
+        stx()
+        obs = next_obs

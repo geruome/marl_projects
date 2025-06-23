@@ -1,6 +1,7 @@
 from agent import MahjongGBAgent
 from collections import defaultdict
 import numpy as np
+from pdb import set_trace as stx
 
 try:
     from MahjongGB import MahjongFanCalculator
@@ -12,7 +13,7 @@ class FeatureAgent(MahjongGBAgent):
     
     '''
     observation: 6*4*9
-        (men+quan+hand4)*4*9
+        (men+quan+hand4)*4*9  ??
     action_mask: 235
         pass1+hu1+discard34+chi63(3*7*3)+peng34+gang34+angang34+bugang34
     '''
@@ -44,7 +45,7 @@ class FeatureAgent(MahjongGBAgent):
     ]
     OFFSET_TILE = {c : i for i, c in enumerate(TILE_LIST)}
     
-    def __init__(self, seatWind):
+    def __init__(self, seatWind): # seatWind: 0-3, 座位号
         self.seatWind = seatWind
         self.packs = [[] for i in range(4)]
         self.history = [[] for i in range(4)]
@@ -53,8 +54,7 @@ class FeatureAgent(MahjongGBAgent):
         self.wallLast = False
         self.isAboutKong = False
         self.obs = np.zeros((self.OBS_SIZE, 36))
-        self.obs[self.OFFSET_OBS['SEAT_WIND']][self.OFFSET_TILE['F%d' % (self.seatWind + 1)]] = 1
-    
+        self.obs[self.OFFSET_OBS['SEAT_WIND']][self.OFFSET_TILE['F%d' % (self.seatWind + 1)]] = 1 # 只记录下座位吧
     '''
     Wind 0..3
     Deal XX XX ...
@@ -84,6 +84,7 @@ class FeatureAgent(MahjongGBAgent):
             return
         if t[0] == 'Deal':
             self.hand = t[1:]
+            # print(self.hand, type(self.hand))
             self._hand_embedding_update()
             return
         if t[0] == 'Huang':
@@ -306,11 +307,11 @@ class FeatureAgent(MahjongGBAgent):
         for a in self.valid:
             mask[a] = 1
         return {
-            'observation': self.obs.reshape((self.OBS_SIZE, 4, 9)).copy(),
+            'observation': self.obs.reshape((self.OBS_SIZE, 4, 9)).copy(), # here
             'action_mask': mask
         }
     
-    def _hand_embedding_update(self):
+    def _hand_embedding_update(self): # here
         self.obs[self.OFFSET_OBS['HAND'] : ] = 0
         d = defaultdict(int)
         for tile in self.hand:
@@ -319,6 +320,7 @@ class FeatureAgent(MahjongGBAgent):
             self.obs[self.OFFSET_OBS['HAND'] : self.OFFSET_OBS['HAND'] + d[tile], self.OFFSET_TILE[tile]] = 1
     
     def _check_mahjong(self, winTile, isSelfDrawn = False, isAboutKong = False):
+        # print('----------------')
         try:
             fans = MahjongFanCalculator(
                 pack = tuple(self.packs[0]),
@@ -333,6 +335,7 @@ class FeatureAgent(MahjongGBAgent):
                 prevalentWind = self.prevalentWind,
                 verbose = True
             )
+            # print(fans, '?????????')
             fanCnt = 0
             for fanPoint, cnt, fanName, fanNameEn in fans:
                 fanCnt += fanPoint * cnt

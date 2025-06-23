@@ -5,14 +5,14 @@ from learner import Learner
 if __name__ == '__main__':
     config = {
         'replay_buffer_size': 50000,
-        'replay_buffer_episode': 400,
+        'replay_buffer_episode': 400, # Queue参数 ??
         'model_pool_size': 4, # ? 1就够了吧
         'model_pool_name': 'model-pool',
-        'num_actors': 4,
+        'num_actors': 8,
         'episodes_per_actor': 1000,
         'gamma': 0.98,
         'lambda': 0.95,
-        'min_sample': 200, # ?
+        'min_sample': 256, # ?
         'batch_size': 256,
         'epochs': 5,
         'clip': 0.2,
