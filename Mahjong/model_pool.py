@@ -28,6 +28,7 @@ class ModelPoolServer:
         self.model_list[n] = metadata
         self.shared_model_list[n] = cPickle.dumps(metadata)
         self.n += 1
+        # print(f"model version: {self.n} ----", flush=True)
         self.shared_model_list[-1] = self.n
         metadata['memory'] = memory
 
@@ -51,7 +52,20 @@ class ModelPoolClient:
         if n > self.n:
             # new models available, update local list
             for i in range(max(self.n, n - self.capacity), n):
-                self.model_list[i % self.capacity] = cPickle.loads(self.shared_model_list[i % self.capacity])
+                # self.model_list[i % self.capacity] = cPickle.loads(self.shared_model_list[i % self.capacity])
+                retry_cnt = 0
+                while True:
+                    try:
+                        self.model_list[i % self.capacity] = cPickle.loads(self.shared_model_list[i % self.capacity])
+                        break
+                    # except EOFError:
+                    #     print(f"Error loading metadata for index {i % self.capacity}, retrying...", flush=True)
+                    except Exception as e:
+                        print(f"Error during loading index {i % self.capacity}: {e}\nretrying...", flush=True)
+                        time.sleep(0.1)
+                        retry_cnt += 1
+                        if retry_cnt >= 3:
+                            assert 0
             self.n = n
     
     def get_model_list(self):

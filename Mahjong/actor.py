@@ -6,10 +6,10 @@ from replay_buffer import ReplayBuffer
 from model_pool import ModelPoolClient
 from env import MahjongGBEnv
 from feature import FeatureAgent
-from model import CNNModel
+from model import MyModel
+import random
 
 class Actor(Process):
-    
     def __init__(self, config, replay_buffer):
         super(Actor, self).__init__()
         self.replay_buffer = replay_buffer
@@ -23,7 +23,7 @@ class Actor(Process):
         model_pool = ModelPoolClient(self.config['model_pool_name'])
         
         # create network model
-        model = CNNModel()
+        model = MyModel()
         
         # load initial model
         version = model_pool.get_latest_model()
@@ -34,7 +34,12 @@ class Actor(Process):
         env = MahjongGBEnv(config = {'agent_clz': FeatureAgent})
         policies = {player : model for player in env.agent_names} # all four players use the latest model
         
-        for episode in range(self.config['episodes_per_actor']):
+        episode = 0
+        total_try = 0
+        total_rewards = {agent_name: 0 for agent_name in env.agent_names}
+        # for episode in range(self.config['episodes_per_actor']):
+        while episode < self.config['episodes_per_actor']:
+            total_try += 1
             # update model
             latest = model_pool.get_latest_model()
             if latest['id'] > version['id']:
@@ -60,6 +65,14 @@ class Actor(Process):
                 values = {}
                 assert len(obs) in [1,3]
                 for agent_name in obs:
+                    if agent_name != 'player_1': # 只训player1试试
+                        arr = obs[agent_name]['action_mask']
+                        indices = np.where(arr == 1)[0]
+                        assert indices.size > 0
+                        action = random.choice(indices).item()
+                        actions[agent_name] = action
+                        continue
+
                     agent_data = episode_data[agent_name]
                     state = obs[agent_name]
                     agent_data['state']['observation'].append(state['observation'])
@@ -79,18 +92,28 @@ class Actor(Process):
                     agent_data['value'].append(values[agent_name])
                 # interact with env
                 next_obs, rewards, done = env.step(actions)
+
+                if not done:
+                    assert all(value == 0 for value in rewards.values())
                 for agent_name in rewards:
                     episode_data[agent_name]['reward'].append(rewards[agent_name])
+                    total_rewards[agent_name] += rewards[agent_name]
                 obs = next_obs
             
             # print('----------', rewards); exit(0)
             if all(value == 0 for value in rewards.values()):
-                episode -= 1
                 continue
-            print(self.name, 'Episode', episode, 'Model', latest['id'], 'Reward', rewards, flush=True)
+            episode += 1
+            print(self.name, 'Episode', episode, 'hu_rate', f'{episode/total_try:.2f}', 'Model', latest['id'], 'Reward', rewards, 'Total_rewards', total_rewards, flush=True) # ?? 为何 episode没到1000
 
             # postprocessing episode data for each agent
             for agent_name, agent_data in episode_data.items():
+                if agent_name != 'player_1':
+                    continue
+
+                if agent_data['reward'][-1] <= 0: # 只训练胡牌的agent
+                    continue
+
                 if len(agent_data['action']) < len(agent_data['reward']):
                     agent_data['reward'].pop(0)
                 obs = np.stack(agent_data['state']['observation'])
@@ -120,3 +143,4 @@ class Actor(Process):
                     'adv': advantages,
                     'target': td_target
                 })
+

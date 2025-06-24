@@ -339,7 +339,7 @@ class FeatureAgent(MahjongGBAgent):
             fanCnt = 0
             for fanPoint, cnt, fanName, fanNameEn in fans:
                 fanCnt += fanPoint * cnt
-            if fanCnt < 8: raise Exception('Not Enough Fans')
+            # if fanCnt < 8: raise Exception('Not Enough Fans')
         except:
             return False
         return True

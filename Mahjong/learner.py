@@ -6,9 +6,11 @@ from torch.nn import functional as F
 
 from replay_buffer import ReplayBuffer
 from model_pool import ModelPoolServer
-from model import CNNModel
+from model import MyModel
+import os
 
-class Learner(Process):
+
+class Learner(Process): # 
     
     def __init__(self, config, replay_buffer):
         super(Learner, self).__init__()
@@ -21,7 +23,7 @@ class Learner(Process):
         
         # initialize model params
         device = torch.device(self.config['device'])
-        model = CNNModel()
+        model = MyModel()
         
         # send to model pool
         model_pool.push(model.state_dict()) # push cpu-only tensor to model_pool
@@ -30,14 +32,12 @@ class Learner(Process):
         # training
         optimizer = torch.optim.RMSprop(model.parameters(), lr = self.config['lr'])
         
-        # wait for initial samples
-        while self.replay_buffer.size() < self.config['min_sample']:
-            # print(self.replay_buffer.size(), '-----------')
-            time.sleep(0.1)
-        
-        cur_time = time.time()
         iterations = 0
-        while True:
+        while iterations <= self.config['total_iters']:
+            iterations += 1
+            while self.replay_buffer.size() < self.config['min_sample']:
+                # print(self.replay_buffer.size(), '-----------')
+                time.sleep(1)
             # sample batch
             batch = self.replay_buffer.sample(self.config['batch_size'])
             obs = torch.tensor(batch['state']['observation']).to(device)
@@ -50,7 +50,7 @@ class Learner(Process):
             advs = torch.tensor(batch['adv']).to(device)
             targets = torch.tensor(batch['target']).to(device)
             
-            # print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
+            print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
             
             # calculate PPO loss
             model.train(True) # Batch Norm training mode
@@ -79,9 +79,10 @@ class Learner(Process):
             model = model.to(device)
             
             # save checkpoints
-            t = time.time()
-            if t - cur_time > self.config['ckpt_save_interval']:
-                path = self.config['ckpt_save_path'] + 'model_%d.pt' % iterations
+            if iterations % self.config['ckpt_save_interval'] == 0:
+                if not hasattr(self, 'expr_dir'):
+                    self.expr_dir = os.path.join('expe', time.strftime('%m%d%H%M', time.localtime()))
+                    os.makedirs(self.expr_dir, exist_ok=True)
+                path = os.path.join(self.expr_dir, f'model_{iterations}.pt')
                 torch.save(model.state_dict(), path)
-                cur_time = t
-            iterations += 1
+

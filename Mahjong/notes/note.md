@@ -10,8 +10,6 @@
 
 episodes_per_actor = 1000 完之后就结束了。一堆报错不用管。
 
-reward全0是不是没一点用 ??
-
 235个动作。action_mask = pass1+hu1+discard34+chi63(3*7*3)+peng34+gang34+angang34+bugang34
 
 state: 34种牌0-4即可, 却要 6 * 4 * 9. 
@@ -30,7 +28,18 @@ reward：番数(不胡牌没番，怎么办) + 胡牌快慢
 MahjongFanCalculator 不胡牌就报错。
 <!-- 单人 -> 多人：
 非自己轮次(13张牌)时的操作。告诉agent吃/碰/杠等操作后的state.  -->
+修改obs、model。
+专家数据。
 
+座位 / 顺序如何定的 ??
+replay_buffer完善。
+加速cuda.
+
+单独训一个人。
+四人纯随机胡牌率：0.03
+
+File /model-pool exist ????
 
 ##
 nohup python train.py > output.log 2>&1 &
+nohup python tester.py > output.log 2>&1 &

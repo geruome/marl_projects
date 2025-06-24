@@ -288,7 +288,6 @@ class MahjongGBEnv():
         self.obs = {i : self.agents[i].request2obs('Player %d BuGang %s' % (player, tile)) for i in range(4) if i != player}
     
     def _checkMahjong(self, player, isSelfDrawn = False, isAboutKong = False):
-        # print('-----------------------')
         try:
             fans = MahjongFanCalculator(
                 pack = tuple(self.packs[player]),
@@ -306,15 +305,18 @@ class MahjongGBEnv():
             fanCnt = 0
             for fanPoint, cnt, fanName, fanNameEn in fans:
                 fanCnt += fanPoint * cnt
-            if fanCnt < 8: raise Error('Not Enough Fans')
+            # if fanCnt < 8: raise Error('Not Enough Fans')
             self.obs = {i : self.agents[i].request2obs('Player %d Hu' % player) for i in range(4)}
-            if isSelfDrawn:
-                self.reward = [-(8 + fanCnt)] * 4
-                self.reward[player] = (8 + fanCnt) * 3
-            else:
-                self.reward = [-8] * 4
-                self.reward[player] = 8 * 3 + fanCnt
-                self.reward[self.curPlayer] -= fanCnt
+            # if isSelfDrawn:
+            #     self.reward = [-(8 + fanCnt)] * 4
+            #     self.reward[player] = (8 + fanCnt) * 3
+            # else:
+            #     self.reward = [-8] * 4
+            #     self.reward[player] = 8 * 3 + fanCnt
+            #     self.reward[self.curPlayer] -= fanCnt
+            self.reward = [0] * 4
+            self.reward[player] = 1 # 只奖励胡牌. 不论番数均为1. 
+
             self.done = True
         except Exception as e:
             raise Error(player)

@@ -1,8 +1,7 @@
 import torch
 from torch import nn
 
-class CNNModel(nn.Module):
-
+class MyModel(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
         self._tower = nn.Sequential(

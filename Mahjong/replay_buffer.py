@@ -3,38 +3,71 @@ from collections import deque
 import numpy as np
 import random
 
-class ReplayBuffer:
 
-    def __init__(self, capacity, episode):
-        self.queue = Queue(episode) # 多进程理应不共享数据。但multiprocessing.Queue是特殊共享通道，其他属性都不行。
+class ReplayBuffer:
+    def __init__(self, capacity, queue_size, max_sample_count=4):
+        self.queue = Queue(queue_size)
         self.capacity = capacity
-        self.buffer = None
+        self.buffer = [] # Stores (sample_data, current_sample_count, timestamp_sample_in)
+        
+        self.max_sample_count = max_sample_count
+        self.max_age_samples = capacity
+
+        self.stats = {
+            'sample_in': 0, 
+            'sample_out': 0, 
+            'episode_in': 0, 
+            'sample_removed_count_limit': 0, 
+            'sample_removed_age_limit': 0
+        }
     
-    def push(self, samples): # only called by actors
+    def push(self, samples):
         self.queue.put(samples)
     
     def _flush(self):
-        if self.buffer is None: # called first time by learner
-            self.buffer = deque(maxlen = self.capacity)
-            self.stats = {'sample_in': 0, 'sample_out': 0, 'episode_in': 0}
+        # Filter out old or excessively sampled data
+        samples_to_keep = []
+        current_sample_count_in_buffer = self.stats['sample_in'] # Use this as the current "time" for age calculation
+
+        for sample_data, current_count, timestamp in self.buffer:
+            if current_count >= self.max_sample_count:
+                self.stats['sample_removed_count_limit'] += 1
+                continue
+            
+            if current_sample_count_in_buffer - timestamp > self.max_age_samples:
+                self.stats['sample_removed_age_limit'] += 1
+                continue
+
+            samples_to_keep.append((sample_data, current_count, timestamp))
+        
+        self.buffer = samples_to_keep
+
+        # Add new data from queue
         while not self.queue.empty():
-            # data flushed from queue to buffer
             episode_data = self.queue.get()
             unpacked_data = self._unpack(episode_data)
-            self.buffer.extend(unpacked_data)
-            self.stats['sample_in'] += len(unpacked_data)
+            
+            for sample_item in unpacked_data:
+                self.buffer.append((sample_item, 0, self.stats['sample_in'])) 
+                self.stats['sample_in'] += 1
+
             self.stats['episode_in'] += 1
-    
-    def sample(self, batch_size): # only called by learner
+
+    def sample(self, batch_size):
         self._flush()
-        assert len(self.buffer) > 0, "Empty buffer!"
-        self.stats['sample_out'] += batch_size
-        if batch_size >= len(self.buffer):
-            samples = self.buffer
-        else:
-            samples = random.sample(self.buffer, batch_size) # 采样快于学习时, 舍弃
-        batch = self._pack(samples)
-        return batch
+        assert batch_size <= len(self.buffer)
+
+        actual_batch_size = min(batch_size, len(self.buffer))
+        sampled_indices = random.sample(range(len(self.buffer)), actual_batch_size)
+        
+        samples_to_return = []
+        for idx in sampled_indices:
+            sample_data, current_count, timestamp = self.buffer[idx]
+            self.buffer[idx] = (sample_data, current_count + 1, timestamp)
+            samples_to_return.append(sample_data)
+
+        self.stats['sample_out'] += actual_batch_size
+        return self._pack(samples_to_return)
     
     def size(self): # only called by learner
         self._flush()

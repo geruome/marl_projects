@@ -4,9 +4,9 @@ from learner import Learner
 
 if __name__ == '__main__':
     config = {
-        'replay_buffer_size': 50000,
-        'replay_buffer_episode': 400, # Queue参数 ??
-        'model_pool_size': 4, # ? 1就够了吧
+        'replay_buffer_size': 5000, # 小点,只学习近期数据
+        'replay_buffer_episode': 400, # Queue参数. Queue收集episode,unpack给buffer
+        'model_pool_size': 4, # ? 1就够吧
         'model_pool_name': 'model-pool',
         'num_actors': 8,
         'episodes_per_actor': 1000,
@@ -16,12 +16,12 @@ if __name__ == '__main__':
         'batch_size': 256,
         'epochs': 5,
         'clip': 0.2,
-        'lr': 1e-4,
+        'lr': 1e-3,
         'value_coeff': 1,
         'entropy_coeff': 0.01,
         'device': 'cuda',
-        'ckpt_save_interval': 300, # 
-        'ckpt_save_path': '/model/'
+        'total_iters': 10000,
+        'ckpt_save_interval': 100,
     }
     
     replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'])
