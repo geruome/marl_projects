@@ -39,7 +39,7 @@ class MahjongGBEnv():
         if self.variety > 0:
             random.seed(self.r.randint(0, self.variety - 1))
         # Init prevalent wind
-        self.prevalentWind = random.randint(0, 3) if prevalentWind < 0 else prevalentWind
+        self.prevalentWind = random.randint(0, 3) if prevalentWind < 0 else prevalentWind # 场风(与额外分数相关,与座位等无关)
         for agent in self.agents:
             agent.request2obs('Wind %d' % self.prevalentWind)
         # Prepare tile wall
@@ -178,7 +178,7 @@ class MahjongGBEnv():
             self.hands.append(hand)
             self.packs.append([])
             self.agents[i].request2obs(' '.join(['Deal', *hand]))
-        self.curPlayer = 0
+        self.curPlayer = 0 # 庄家永远是 player0
         self.drawAboutKong = False
         self._draw(self.curPlayer)
     
@@ -195,7 +195,7 @@ class MahjongGBEnv():
                 self.agents[i].request2obs('Player %d Draw' % player) # 其他player
         self.obs = {player : self.agents[player].request2obs('Draw %s' % tile)} # 当前player
     
-    def _discard(self, player, tile): # 弃牌,等待响应。
+    def _discard(self, player, tile): # 弃牌(出牌),等待响应。
         if tile not in self.hands[player]: raise Error(player)
         self.hands[player].remove(tile)
         self.shownTiles[tile] += 1
@@ -231,7 +231,7 @@ class MahjongGBEnv():
         for i in range(4):
             if i != player:
                 self.agents[i].request2obs('Player %d Peng' % player)
-        self.obs = {player : self.agents[player].request2obs('Player %d Peng' % player)}
+        self.obs = {player : self.agents[player].request2obs('Player %d Peng' % player)} # 
     
     def _chow(self, player, tile):
         self.hands[player].append(self.curTile)
@@ -332,7 +332,7 @@ if __name__ == '__main__':
         # print(obs) # 相邻两个step：(当前player, 其他三个player)
         actions = {}
         for agent_name in obs:
-            print(agent_name)
+            # print(agent_name)
             arr = obs[agent_name]['action_mask']
             indices = np.where(arr == 1)[0]
             # print(indices, type(indices))

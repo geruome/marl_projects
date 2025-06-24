@@ -83,6 +83,6 @@ class Learner(Process): #
                 if not hasattr(self, 'expr_dir'):
                     self.expr_dir = os.path.join('expe', time.strftime('%m%d%H%M', time.localtime()))
                     os.makedirs(self.expr_dir, exist_ok=True)
-                path = os.path.join(self.expr_dir, f'model_{iterations}.pt')
+                path = os.path.join(self.expr_dir, 'models', f'model_{iterations}.pt')
                 torch.save(model.state_dict(), path)
 

@@ -21,7 +21,7 @@ if __name__ == '__main__':
         'entropy_coeff': 0.01,
         'device': 'cuda',
         'total_iters': 10000,
-        'ckpt_save_interval': 100,
+        'ckpt_save_interval': 500,
     }
     
     replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'])

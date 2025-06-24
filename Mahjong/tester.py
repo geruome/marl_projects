@@ -8,7 +8,7 @@ from env import MahjongGBEnv
 from feature import FeatureAgent
 from model import MyModel
 import random
-
+from pdb import set_trace as stx
 
 class Tester4(): # 4人, 指定预训练模型/纯随机。
     def __init__(self, config):
@@ -90,9 +90,10 @@ class Tester4(): # 4人, 指定预训练模型/纯随机。
                 obs = next_obs
             
             # print('----------', rewards); exit(0)
-            if not all(value == 0 for value in rewards.values()):
-                hu_episode += 1
+            # if not all(value == 0 for value in rewards.values()):
+            #     hu_episode += 1
             print('Episode', episode, 'Reward', rewards, 'Total_rewards', total_rewards, flush=True)
+            # stx()
 
         print(total_rewards)
 
@@ -100,6 +101,6 @@ class Tester4(): # 4人, 指定预训练模型/纯随机。
 if __name__ == '__main__':
     config = {
         'episodes': 1000,
-        'policies': ['expe/06242109/model_100.pt', 'random', 'random', 'random']
+        'policies': ['expe/06242243/models/model_100.pt', 'random', 'random', 'random']
     }
     tester = Tester4(config)

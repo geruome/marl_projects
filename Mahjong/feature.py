@@ -76,7 +76,12 @@ class FeatureAgent(MahjongGBAgent):
     Player N(me) Peng
     Player N(me) Chi XX
     '''
-    def request2obs(self, request):
+    def request2obs(self, request): # here !!
+        print(f"player {self.seatWind} ------------")
+        print(f"Request : {request}")
+        if hasattr(self, 'hand'):
+            print("Hand: ", self.hand)
+
         t = request.split()
         if t[0] == 'Wind':
             self.prevalentWind = int(t[1])
@@ -111,7 +116,7 @@ class FeatureAgent(MahjongGBAgent):
                         self.valid.append(self.OFFSET_ACT['BuGang'] + self.OFFSET_TILE[tile])
             return self._obs()
         # Player N Invalid/Hu/Draw/Play/Chi/Peng/Gang/AnGang/BuGang XX
-        p = (int(t[1]) + 4 - self.seatWind) % 4
+        p = (int(t[1]) + 4 - self.seatWind) % 4 # ??
         if t[2] == 'Draw':
             self.tileWall[p] -= 1
             self.wallLast = self.tileWall[(p + 1) % 4] == 0
@@ -175,7 +180,7 @@ class FeatureAgent(MahjongGBAgent):
                 return self._obs()
             else:
                 return
-        if t[2] == 'UnChi':
+        if t[2] == 'UnChi': # 没遇到
             tile = t[3]
             color = tile[0]
             num = int(tile[1])
@@ -204,7 +209,7 @@ class FeatureAgent(MahjongGBAgent):
                 return self._obs()
             else:
                 return
-        if t[2] == 'UnPeng':
+        if t[2] == 'UnPeng': # 没遇到
             self.packs[p].pop()
             self.shownTiles[self.curTile] -= 2
             if p == 0:
