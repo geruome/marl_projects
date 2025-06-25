@@ -1,41 +1,54 @@
 from replay_buffer import ReplayBuffer
 from actor import Actor
 from learner import Learner
+from utils import set_all_seeds
+import time
+
 
 if __name__ == '__main__':
+    seed = int(time.time())
+    # seed = 1750845888
+
+    set_all_seeds(seed)
+
     config = {
         'replay_buffer_size': 5000, # 小点,只学习近期数据
         'replay_buffer_episode': 400, # Queue参数. Queue收集episode,unpack给buffer
+        'max_sample_count': 8, 
         'model_pool_size': 4, # ? 1就够吧
         'model_pool_name': 'model-pool',
         'num_actors': 8,
-        'episodes_per_actor': 1000,
+        'episodes_per_actor': 5000,
         'gamma': 0.98,
         'lambda': 0.95,
-        'min_sample': 256, # ?
-        'batch_size': 256,
+        'min_sample': 512, # 
+        'batch_size': 128,
         'epochs': 5,
         'clip': 0.2,
         'lr': 1e-3,
         'value_coeff': 1,
-        'entropy_coeff': 0.01,
+        'entropy_coeff': 0.01, # 还可以手动(e-greedy)鼓励探索。
         'device': 'cuda',
-        'total_iters': 10000,
+        'total_iters': 50000,
         'ckpt_save_interval': 500,
+        'seed': seed,
     }
     
-    replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'])
-    
+    replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'], config['max_sample_count'])
+
+    learner = Learner(config, replay_buffer)
+
     actors = []
     for i in range(config['num_actors']):
         config['name'] = 'Actor-%d' % i
         actor = Actor(config, replay_buffer)
         actors.append(actor)
-    learner = Learner(config, replay_buffer)
     
     # Process对象的start(): 创建一个新进程 + 调用run()
     for actor in actors: actor.start()
     learner.start()
     
     for actor in actors: actor.join() # join(): 让主进程等待子进程完成run()
-    learner.terminate() # 跑完再停
+    learner.terminate()
+
+    # 子进程最后报错。如何正常结束

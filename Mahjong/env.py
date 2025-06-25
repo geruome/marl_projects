@@ -219,7 +219,7 @@ class MahjongGBEnv():
             agent.request2obs('Player %d Gang' % player)
         self._draw(player)
     
-    def _pung(self, player, tile):
+    def _pung(self, player, tile): # Peng
         self.hands[player].append(self.curTile)
         if self.hands[player].count(tile) < 3: raise Error(player)
         for i in range(3): self.hands[player].remove(tile)
@@ -233,7 +233,7 @@ class MahjongGBEnv():
                 self.agents[i].request2obs('Player %d Peng' % player)
         self.obs = {player : self.agents[player].request2obs('Player %d Peng' % player)} # 
     
-    def _chow(self, player, tile):
+    def _chow(self, player, tile): # Chi
         self.hands[player].append(self.curTile)
         self.shownTiles[self.curTile] -= 1
         color = tile[0]

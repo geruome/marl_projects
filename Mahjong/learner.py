@@ -3,20 +3,28 @@ import time
 import numpy as np
 import torch
 from torch.nn import functional as F
+import os
+import json
 
 from replay_buffer import ReplayBuffer
 from model_pool import ModelPoolServer
 from model import MyModel
-import os
+from utils import set_all_seeds
 
 
 class Learner(Process): # 
-    
     def __init__(self, config, replay_buffer):
         super(Learner, self).__init__()
         self.replay_buffer = replay_buffer
         self.config = config
-    
+
+        set_all_seeds(config['seed'])
+        self.expr_dir = os.path.join('expe', time.strftime('%m%d%H%M', time.localtime()))
+        os.makedirs(self.expr_dir, exist_ok=True)
+        with open(os.path.join(self.expr_dir, 'config.json'), 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+        os.makedirs(os.path.join(self.expr_dir, 'models'), exist_ok=True)
+        
     def run(self):
         # create model pool. 负责模型的发布和管理，Actor 会从这里拉取最新模型
         model_pool = ModelPoolServer(self.config['model_pool_size'], self.config['model_pool_name'])
@@ -80,9 +88,6 @@ class Learner(Process): #
             
             # save checkpoints
             if iterations % self.config['ckpt_save_interval'] == 0:
-                if not hasattr(self, 'expr_dir'):
-                    self.expr_dir = os.path.join('expe', time.strftime('%m%d%H%M', time.localtime()))
-                    os.makedirs(self.expr_dir, exist_ok=True)
                 path = os.path.join(self.expr_dir, 'models', f'model_{iterations}.pt')
                 torch.save(model.state_dict(), path)
 

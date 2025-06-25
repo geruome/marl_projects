@@ -2,6 +2,7 @@ from multiprocessing.shared_memory import SharedMemory, ShareableList
 import _pickle as cPickle
 import time
 
+
 class ModelPoolServer:
     def __init__(self, capacity, name):
         self.capacity = capacity

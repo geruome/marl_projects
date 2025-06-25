@@ -8,14 +8,20 @@ from env import MahjongGBEnv
 from feature import FeatureAgent
 from model import MyModel
 import random
+from utils import set_all_seeds
+
 
 class Actor(Process):
     def __init__(self, config, replay_buffer):
         super(Actor, self).__init__()
         self.replay_buffer = replay_buffer
         self.config = config
+
         self.name = config.get('name', 'Actor-?')
+        seed = config['seed'] # + int(self.name[-1]) ?? 为什么不同就训不动了
+        set_all_seeds(seed)
         
+
     def run(self):
         torch.set_num_threads(1)
     
@@ -32,7 +38,7 @@ class Actor(Process):
         
         # collect data
         env = MahjongGBEnv(config = {'agent_clz': FeatureAgent})
-        policies = {player : model for player in env.agent_names} # all four players use the latest model
+        # policies = {player : model for player in env.agent_names} # all four players use the latest model
         
         episode = 0
         total_try = 0
@@ -46,7 +52,7 @@ class Actor(Process):
                 state_dict = model_pool.load_model(latest)
                 model.load_state_dict(state_dict)
                 version = latest
-            
+
             # run one episode and collect data
             obs = env.reset()
             episode_data = {agent_name: {
@@ -65,8 +71,11 @@ class Actor(Process):
                 values = {}
                 assert len(obs) in [1,3]
                 for agent_name in obs:
-                    if agent_name != 'player_1': # 只训player1试试
+                    if agent_name != 'player_1': # 只训player1, 其他全pass
                         arr = obs[agent_name]['action_mask']
+                        if arr[0] == 1: # Pass
+                            actions[agent_name] = 0
+                            continue
                         indices = np.where(arr == 1)[0]
                         assert indices.size > 0
                         action = random.choice(indices).item()
@@ -101,10 +110,12 @@ class Actor(Process):
                 obs = next_obs
             
             # print('----------', rewards); exit(0)
-            if all(value == 0 for value in rewards.values()):
+            # if all(value == 0 for value in rewards.values()):
+            if rewards['player_1'] <= 0:
                 continue
             episode += 1
-            print(self.name, 'Episode', episode, 'hu_rate', f'{episode/total_try:.2f}', 'Model', latest['id'], 'Reward', rewards, 'Total_rewards', total_rewards, flush=True) # ?? 为何 episode没到1000
+
+            print(self.name, 'Episode', episode, 'hu_rate', f'{episode/total_try:.2f}', 'Model', latest['id'], 'Reward', rewards['player_1'], flush=True)
 
             # postprocessing episode data for each agent
             for agent_name, agent_data in episode_data.items():
