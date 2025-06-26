@@ -34,12 +34,38 @@ reward：番数(不胡牌没番，怎么办) + 胡牌快慢
 
 多进程tester更慢了..
 
-Adam VS RMSprop
+Adam VS RMSprop. Adam是对的，而且稳步上升。
+
+avg_reward：(reward=1)
+expe/0626194320_great/models/model_34000.pt: 0.73
+expe/0626200248/models/model_42000.pt: 0.75
+expe/0626202920/models/model_24000.pt: 0.76
+
+expe/0626205954_great/models/model_39000.pt (>=8): 0.26
+
+添加 loss / hu_rate 项。
 
 改成看番数。
 
+负奖励 ?? 自举 ??
+
+0626223307 往后胡的越来越大 ??
+
+self.reward[player] = -30 为什么会触发这个 ..
+
+勾选长时运行 + 简单交互。
+
+接近胡的时候操作的很对，之前的操作不太对 ??????
+
 
 ##
+pip install PyMahjongGB
+
 nohup python train.py > output.log 2>&1 &
 
 nohup python tester.py > output.log 2>&1 &
+
+rm my_bot.zip  &&  zip my_bot.zip __main__.py model.py agent.py feature.py
+
+weight.pt 之类的，要放在个人空间data, 不能携zip上传
+

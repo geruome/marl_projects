@@ -6,9 +6,8 @@ import time
 
 
 if __name__ == '__main__':
-    # seed = int(time.time())
-    seed = 1750872601
-
+    seed = int(time.time())
+    # seed = 1750872601
     set_all_seeds(seed)
 
     config = {
@@ -18,10 +17,10 @@ if __name__ == '__main__':
         'model_pool_size': 2, # ? 1就够吧
         'model_pool_name': 'model-pool',
         'num_actors': 12,
-        'episodes_per_actor': 5000,
+        'episodes_per_actor': 20000,
         'gamma': 0.99,
         'lambda': 0.95,
-        'min_sample': 512, # 
+        'min_sample': 256, # 
         'batch_size': 128,
         'epochs': 5,
         'clip': 0.2,
@@ -29,10 +28,13 @@ if __name__ == '__main__':
         'value_coeff': 1,
         'entropy_coeff': 0.01, # 还可以手动(e-greedy)鼓励探索。
         'device': 'cuda',
-        'total_iters': 50000,
+        'total_iters': 100000,
         'ckpt_save_interval': 1000,
         'seed': seed,
-        'pretrained_weights': None, # 'expe/06261616/models/model_11000.pt',
+        'pretrained_weights': 'expe/0626205954_great/models/model_39000.pt', 
+        'max_epsilon': 0.08, 
+        'min_epsilon': 0.01,
+        'note': 'reward(fan)=1, >=8',
     }
     
     replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'], config['max_sample_count'])

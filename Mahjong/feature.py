@@ -8,7 +8,7 @@ try:
     from MahjongGB import MahjongFanCalculator
 except:
     print('MahjongGB library required! Please visit https://github.com/ailab-pku/PyMahjongGB for more information.')
-    raise
+    raise ValueError
 
 class FeatureAgent(MahjongGBAgent):
     
@@ -279,7 +279,7 @@ class FeatureAgent(MahjongGBAgent):
             return 'Peng'
         if action < self.OFFSET_ACT['AnGang']:
             return 'Gang'
-        if action < self.OFFSET_ACT['BuGang']:
+        if action < self.OFFSET_ACT['BuGang']: # AnGang
             return 'Gang ' + self.TILE_LIST[action - self.OFFSET_ACT['AnGang']]
         return 'BuGang ' + self.TILE_LIST[action - self.OFFSET_ACT['BuGang']]
     
@@ -437,7 +437,7 @@ class FeatureAgent(MahjongGBAgent):
             fanCnt = 0
             for fanPoint, cnt, fanName, fanNameEn in fans:
                 fanCnt += fanPoint * cnt
-            # if fanCnt < 8: raise Exception('Not Enough Fans')
+            if fanCnt < 8: raise Exception('Not Enough Fans') # here
         except:
             return False
         return True

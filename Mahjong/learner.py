@@ -28,7 +28,6 @@ class Learner(Process): #
         shutil.copy('model.py', os.path.join(self.expr_dir, 'model.py'))
         os.makedirs(os.path.join(self.expr_dir, 'models'), exist_ok=True)
 
-        # self.logger = SummaryWriter(self.expr_dir)
         
     def run(self):
         # create model pool. 负责模型的发布和管理，Actor 会从这里拉取最新模型
@@ -37,7 +36,9 @@ class Learner(Process): #
         # initialize model params
         device = torch.device(self.config['device'])
         model = MyModel()
-        
+
+        self.logger = SummaryWriter(self.expr_dir)
+
         if self.config['pretrained_weights']:
             state_dict = torch.load(self.config['pretrained_weights'])
             model.load_state_dict(state_dict)
@@ -47,7 +48,7 @@ class Learner(Process): #
         model = model.to(device)
         
         # training
-        optimizer = torch.optim.RMSprop(model.parameters(), lr = self.config['lr']) # ??
+        optimizer = torch.optim.Adam(model.parameters(), lr = self.config['lr']) # ??
         
         iterations = 0
         while iterations < self.config['total_iters']:
@@ -61,8 +62,8 @@ class Learner(Process): #
 
             # print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
             avg_reward = self.replay_buffer.avg_reward()
-            print(f'Iteration {iterations}, avg_reward {avg_reward:.2f}', flush=True)
-            # self.logger.add_scalar('Avg_reward', avg_reward, iterations) # ???卡住
+            # print(f'Iteration {iterations}, avg_reward {avg_reward:.2f}', flush=True)
+            self.logger.add_scalar('Avg_reward', avg_reward, iterations) # ???卡住
 
             model.train(True) # Batch Norm training mode
             for _ in range(self.config['epochs']):

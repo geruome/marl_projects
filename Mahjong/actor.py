@@ -43,7 +43,8 @@ class Actor(Process):
         # policies = {player : model for player in env.agent_names} # all four players use the latest model
         
         episode = 0
-        # for episode in range(self.config['episodes_per_actor']):
+        epsilon = self.config['max_epsilon']        
+
         while episode < self.config['episodes_per_actor']:
             # time.sleep(1)
             # update model
@@ -119,8 +120,6 @@ class Actor(Process):
                             value = values_tensor[i].item() 
                             choices.append((action, next_states_to_batch[i], value))
 
-
-                    epsilon = 0.05
                     # e-greedy
                     if random.random() < epsilon:
                         my_action, expected_state, value = random.choice(choices)
@@ -153,7 +152,14 @@ class Actor(Process):
                 continue
             episode += 1
 
-            # print(self.name, 'Episode', episode, 'Model', latest['id'], flush=True)
+            max_epsilon = self.config['max_epsilon']
+            min_epsilon = self.config['min_epsilon']
+            total_episode = self.config['episodes_per_actor']
+
+            epsilon = max_epsilon + (episode / total_episode) * (min_epsilon - max_epsilon)
+            # print(episode, epsilon)
+
+            print(self.name, 'Episode', episode, 'Model', latest['id'], 'Reward', rewards['player_1'], flush=True)
             # print("Avg_reward: ")
 
             # postprocessing episode data for each agent
@@ -191,3 +197,4 @@ class Actor(Process):
                 # )
                 # self.reward_buffer = []
 
+        print(f"End of {self.name} !!")

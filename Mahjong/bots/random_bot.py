@@ -10,7 +10,7 @@ import json
 import random
 
 # 是否使用简单交互（纯文本）而非 JSON。跟原版保持一致，默认 0=JSON 1=简单
-SIMPLEIO = 0
+SIMPLEIO = 1
 
 
 def read_simple_io():
@@ -32,17 +32,6 @@ def read_simple_io():
 
     # 当前请求
     requests.append(sys.stdin.readline().rstrip('\n'))
-    return turn_id, requests, responses
-
-
-def read_json_io():
-    """
-    读取 Botzone JSON 输入，返回 turn_id, requests, responses
-    """
-    input_json = json.load(sys.stdin)
-    turn_id = len(input_json["responses"])
-    requests = [req for req in input_json["requests"][:turn_id + 1]]
-    responses = [resp for resp in input_json["responses"]]
     return turn_id, requests, responses
 
 
@@ -108,8 +97,8 @@ def main():
     if SIMPLEIO:
         turn_id, requests, responses = read_simple_io()
     else:
-        turn_id, requests, responses = read_json_io()
-
+        assert 0
+        
     # 简单策略
     if turn_id < 2:
         reply = "PASS"
