@@ -10,6 +10,8 @@ from replay_buffer import ReplayBuffer
 from model_pool import ModelPoolServer
 from model import MyModel
 from utils import set_all_seeds
+from torch.utils.tensorboard import SummaryWriter
+import shutil
 
 
 class Learner(Process): # 
@@ -19,11 +21,14 @@ class Learner(Process): #
         self.config = config
 
         set_all_seeds(config['seed'])
-        self.expr_dir = os.path.join('expe', time.strftime('%m%d%H%M', time.localtime()))
+        self.expr_dir = os.path.join('expe', time.strftime('%m%d%H%M%S', time.localtime()))
         os.makedirs(self.expr_dir, exist_ok=True)
         with open(os.path.join(self.expr_dir, 'config.json'), 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
+        shutil.copy('model.py', os.path.join(self.expr_dir, 'model.py'))
         os.makedirs(os.path.join(self.expr_dir, 'models'), exist_ok=True)
+
+        # self.logger = SummaryWriter(self.expr_dir)
         
     def run(self):
         # create model pool. 负责模型的发布和管理，Actor 会从这里拉取最新模型
@@ -42,21 +47,23 @@ class Learner(Process): #
         model = model.to(device)
         
         # training
-        optimizer = torch.optim.RMSprop(model.parameters(), lr = self.config['lr'])
+        optimizer = torch.optim.RMSprop(model.parameters(), lr = self.config['lr']) # ??
         
         iterations = 0
-        while iterations <= self.config['total_iters']:
+        while iterations < self.config['total_iters']:
             iterations += 1
             while self.replay_buffer.size() < self.config['min_sample']:
-                # print(self.replay_buffer.size(), '-----------')
                 time.sleep(1)
             # sample batch
             batch = self.replay_buffer.sample(self.config['batch_size'])
             states = torch.tensor(batch['states']).to(device)
             td_targets = torch.tensor(batch['td_targets']).to(device)
 
-            print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
-            
+            # print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
+            avg_reward = self.replay_buffer.avg_reward()
+            print(f'Iteration {iterations}, avg_reward {avg_reward:.2f}', flush=True)
+            # self.logger.add_scalar('Avg_reward', avg_reward, iterations) # ???卡住
+
             model.train(True) # Batch Norm training mode
             for _ in range(self.config['epochs']):
                 values = model(states)
@@ -78,3 +85,5 @@ class Learner(Process): #
                 path = os.path.join(self.expr_dir, 'models', f'model_{iterations:05d}.pt')
                 torch.save(model.state_dict(), path)
 
+        print("End !!")
+        # self.logger.close()

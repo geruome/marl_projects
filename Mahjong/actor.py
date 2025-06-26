@@ -9,6 +9,7 @@ from feature import FeatureAgent
 from model import MyModel
 import random
 from utils import set_all_seeds
+import time
 
 
 class Actor(Process):
@@ -44,6 +45,7 @@ class Actor(Process):
         episode = 0
         # for episode in range(self.config['episodes_per_actor']):
         while episode < self.config['episodes_per_actor']:
+            # time.sleep(1)
             # update model
             latest = model_pool.get_latest_model()
             if latest['id'] > version['id']:
@@ -145,14 +147,14 @@ class Actor(Process):
                     episode_data[agent_name]['reward'].append(rewards[agent_name])
                 obs = next_obs
 
-            self.reward_buffer.append(max(rewards['player_1'], 0))
+            self.replay_buffer.push_reward(max(rewards['player_1'], 0))
 
             if rewards['player_1'] <= 0:
                 continue
             episode += 1
 
-            l = min(1000, len(self.reward_buffer))
-            print(self.name, 'Episode', episode, 'avg_reward', f'{sum(self.reward_buffer[-l:]) / l:.2f}', 'Model', latest['id'], flush=True)
+            # print(self.name, 'Episode', episode, 'Model', latest['id'], flush=True)
+            # print("Avg_reward: ")
 
             # postprocessing episode data for each agent
             for agent_name, agent_data in episode_data.items():
@@ -184,4 +186,8 @@ class Actor(Process):
                     # 'rewards': rewards,
                     'td_targets': td_targets,
                 })
+                # self.replay_buffer.push_reward(
+
+                # )
+                # self.reward_buffer = []
 

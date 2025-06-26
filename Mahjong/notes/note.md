@@ -32,13 +32,14 @@ reward：番数(不胡牌没番，怎么办) + 胡牌快慢
 <!-- seed无效 -->
 <!-- 加速cuda. -->
 
-多进程加快 tester
-一个actor结束，learner直接报错 ??
+多进程tester更慢了..
 
-模型大一点
+Adam VS RMSprop
 
 改成看番数。
 
+
 ##
 nohup python train.py > output.log 2>&1 &
+
 nohup python tester.py > output.log 2>&1 &

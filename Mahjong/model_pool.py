@@ -50,6 +50,18 @@ class ModelPoolClient:
     
     def _update_model_list(self):
         n = self.shared_model_list[-1]
+        # retry_cnt = 0
+        # while True:
+        #     try:
+        #         n = self.shared_model_list[-1]
+        #         break
+        #     except Exception as e:
+        #         print(f"Error during loading n: {e}\nretrying...", flush=True)
+        #         time.sleep(0.1)
+        #         retry_cnt += 1
+        #         if retry_cnt >= 3:
+        #             assert 0
+
         if n > self.n:
             # new models available, update local list
             for i in range(max(self.n, n - self.capacity), n):

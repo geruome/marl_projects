@@ -21,10 +21,29 @@ class ReplayBuffer:
             'sample_removed_age_limit': 0
         }
 
+        self.queue_reward = Queue(50000)
+        self.reward_buffer = []
+
     def push(self, samples):
         self.queue.put(samples)
         
+    def push_reward(self, reward):
+        self.queue_reward.put(reward)
+
+    def avg_reward(self):
+        while not self.queue_reward.empty():
+            reward = self.queue_reward.get()
+            self.reward_buffer.append(reward)
+        l = min(5000, len(self.reward_buffer)) # 
+        if l == 0:
+            return 0
+        return sum(self.reward_buffer[-l:]) / l
+
     def _flush(self):
+        while not self.queue_reward.empty():
+            reward = self.queue_reward.get()
+            self.reward_buffer.append(reward)
+
         # Filter out old or excessively sampled data
         samples_to_keep = []
         current_sample_count_in_buffer = self.stats['sample_in'] # Use this as the current "time" for age calculation
@@ -100,8 +119,6 @@ class ReplayBuffer:
                 res[key] = self._pack(values)
             return res
         elif type(data[0]) == np.ndarray:
-            # for d in data:
-            #     print(d.shape)
             return np.stack(data)
         else:
             return np.array(data)

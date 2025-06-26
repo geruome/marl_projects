@@ -128,10 +128,82 @@ class MyModel(nn.Module):
 
         # Return only value
         return value
+
+
+# class MyModel(nn.Module):
+#     def __init__(self):
+#         super(MyModel, self).__init__()
+
+#         # --- Shared Convolutional Block for All 6 Suit Rows (Man, Pin, Sou: Hand/Pack) ---
+#         # 增加通道数，使其能学习更丰富的局部特征
+#         self.suit_conv_block = nn.Sequential(
+#             nn.Conv1d(1, 64, kernel_size=3, padding=1, bias=False), # 通道数从32增加到64
+#             nn.ReLU(True),
+#             nn.Conv1d(64, 128, kernel_size=3, padding=1, bias=False), # 通道数从64增加到128
+#             nn.ReLU(True),
+#             nn.Conv1d(128, 64, kernel_size=3, padding=1, bias=False), # 通道数从32增加到64，确保输出维度与后续拼接匹配
+#             nn.ReLU(True),
+#             nn.AdaptiveAvgPool1d(1), 
+#             nn.Flatten()
+#         )
+        
+#         # --- MLP Block for 7-column Honor Tiles ---
+#         # 增加 MLP 隐藏层的宽度和深度
+#         self.honor_mlp_block = nn.Sequential(
+#             nn.Linear(7, 64), # 输出特征数从32增加到64
+#             nn.ReLU(True),
+#             nn.Linear(64, 64), # 增加一层，并保持宽度
+#             nn.ReLU(True),
+#             nn.Linear(64, 64), # 输出特征数与 suit_conv_block 的输出倍数对齐
+#             nn.ReLU(True)
+#         )
+
+#         # --- Final Feature Fusion and Value Prediction Head ---
+#         # suit_conv_block 输出: (Batch_size, 6 * 64) = (Batch_size, 384)
+#         # honor_mlp_block 输出: (Batch_size, 2 * 64) = (Batch_size, 128)
+#         # Total combined features = 384 + 128 = 512
+        
+#         self.value_head = nn.Sequential(
+#             nn.Linear(6 * 64 + 2 * 64, 256), # 输入特征数从256增加到512，隐藏层宽度增加到256
+#             nn.ReLU(True),
+#             nn.Linear(256, 128), # 隐藏层宽度从128增加到256
+#             nn.ReLU(True),
+#             nn.Linear(128, 64), # 增加一层，并保持宽度
+#             nn.ReLU(True),
+#             nn.Linear(64, 1)
+#         )
+        
+#         for m in self.modules():
+#             if isinstance(m, (nn.Conv1d, nn.Linear)):
+#                 nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+#                 if m.bias is not None:
+#                     nn.init.constant_(m.bias, 0)
+
+#     def forward(self, tensor: torch.tensor):
+#         obs = tensor.float()
+
+#         suit_inputs = obs[:, 0:6, :]
+#         reshaped_suit_inputs = suit_inputs.reshape(-1, 1, 9) 
+#         suit_features_per_row = self.suit_conv_block(reshaped_suit_inputs)
+#         combined_suit_features = suit_features_per_row.view(obs.shape[0], -1)
+        
+#         honor_inputs = obs[:, 6:8, :]
+#         honor_trimmed = honor_inputs[:, :, :7] 
+#         reshaped_honor_input = honor_trimmed.reshape(-1, 7) 
+#         honor_feature_per_row = self.honor_mlp_block(reshaped_honor_input)
+#         combined_honor_features = honor_feature_per_row.view(obs.shape[0], -1)
+        
+#         combined_all_features = torch.cat([combined_suit_features, combined_honor_features], dim=1)
+        
+#         value = self.value_head(combined_all_features)
+
+#         return value
     
 
 if __name__ == '__main__':
     model = MyModel()
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"Params : {num_params}")
     B = 11
     x = torch.rand(B, 8, 9)
     y = model(x)

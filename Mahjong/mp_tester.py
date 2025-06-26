@@ -1,28 +1,23 @@
 from multiprocessing import Process, Queue
 import numpy as np
 import torch
-import random
-import time
-# from replay_buffer import ReplayBuffer # Not directly used in Tester for multi-process setup
-# from model_pool import ModelPoolClient # Not directly used in Tester for multi-process setup
+
 from env import MahjongGBEnv
 from feature import FeatureAgent
 from model import MyModel
+import random
 from utils import set_all_seeds
+import time
+from tqdm import tqdm
 
-class Tester(Process): # Make Tester inherit from Process
+
+class Tester(Process):
     def __init__(self, config, result_queue):
-        super().__init__() # Call the constructor of the parent class (Process)
+        super().__init__()
         self.config = config
-        self.result_queue = result_queue # Queue to send results back to main process
+        self.result_queue = result_queue
 
-    def run(self): # This method will be executed when the process starts
-        # Set a unique seed for each process
-        # Using process ID or a combination with time can ensure uniqueness
-        process_seed = self.config.get('base_seed', int(time.time())) + self.pid # Use process ID for unique seed
-        set_all_seeds(process_seed)
-        print(f"Process {self.pid} started with seed: {process_seed}", flush=True)
-
+    def run(self):
         policies = self.config['policies']
         assert len(policies) == 4
                 
@@ -34,188 +29,150 @@ class Tester(Process): # Make Tester inherit from Process
                 models[env.agent_names[i]] = policy
             else:   
                 model = MyModel()
-                # Load model to CPU first, then transfer to device if needed (though Tester is usually CPU-bound)
-                state_dict = torch.load(policy, map_location='cpu') 
+                state_dict = torch.load(policy)
                 model.load_state_dict(state_dict)
                 model.eval()
                 models[env.agent_names[i]] = model
         
-        total_rewards = {agent_name: 0 for agent_name in env.agent_names}
+        total_rewards = {}
+        for agent_name in env.agent_names:
+            total_rewards[agent_name] = 0
 
-        # Each Tester process runs its own set of episodes
-        # Divide total episodes among testers or let each tester run total_episodes
-        # For simplicity, let each Tester run `episodes_per_tester`
-        episodes_to_run = self.config['episodes_per_tester'] # Renamed for clarity
-
-        for episode_idx in range(episodes_to_run):
-            # run one episode and collect data
+        for episode in tqdm(range(1, self.config['episodes'] + 1)):
             obs = env.reset()
+            episode_data = {agent_name: {
+                'state' : {
+                    'observation': [],
+                    'action_mask': []
+                },
+                'action' : [],
+                'reward' : [],
+                'value' : []
+            } for agent_name in env.agent_names}
             done = False
-            
-            # Reset episode rewards for printout (total_rewards accumulates across episodes)
-            episode_rewards = {agent_name: 0 for agent_name in env.agent_names}
-
             while not done:
                 actions = {}
-                # assert len(obs) in [1,3] # This assertion might fail if env returns obs for all players simultaneously
-                                          # typically, obs only contains observable states for current acting player(s)
-                
-                # Determine which agent is acting based on 'obs' keys
-                current_acting_agents = list(obs.keys())
-                
-                for agent_name in current_acting_agents: # Iterate only over agents that need to act
-                    model = models.get(agent_name) # Get the specific model for this agent
-
-                    if model == 'random': # If it's a random policy
+                values = {}
+                expected_state = None
+                assert len(obs) in [1,3]
+                for agent_name in obs:
+                    if models[agent_name] == 'random':
                         arr = obs[agent_name]['action_mask']
-                        if arr[0] == 1: # Pass
+                        if arr[0] == 1:
                             actions[agent_name] = 0
                             continue
                         indices = np.where(arr == 1)[0]
-                        if indices.size == 0: # No legal actions, should not happen if environment is correct
-                            actions[agent_name] = 0 # Default to Pass if no legal actions (fallback)
-                        else:
-                            actions[agent_name] = random.choice(indices).item()
+                        assert indices.size > 0
+                        action = random.choice(indices).item()
+                        actions[agent_name] = action
                         continue
+
+                    model = models[agent_name]
                     
-                    # --- Logic for learned agent (player_1) ---
-                    # Assuming only 'player_1' uses a learned model based on original code
-                    # If other agents also use learned models, this structure needs adjustment
-                    if agent_name == 'player_1':
-                        state = obs[agent_name]
-                        
-                        # Convert observation to tensor
-                        current_obs_tensor = torch.tensor(state['observation'], dtype=torch.float).unsqueeze(0)
-                        
-                        model.eval() # Set model to evaluation mode for inference
+                    agent_data = episode_data[agent_name]
+                    state = obs[agent_name]
+                    agent_data['state']['observation'].append(state['observation'])
+                    state['observation'] = torch.tensor(state['observation'], dtype = torch.float).unsqueeze(0)
+                    model.train(False)
 
-                        legal_actions = np.where(state['action_mask'] == 1)[0]
-                        
-                        if 1 in legal_actions: # 能胡必胡
-                            actions[agent_name] = 1 # Hu action
-                            continue
+                    legal_actions = np.where(state['action_mask'] == 1)[0]
+                    if 1 in legal_actions:
+                        actions[agent_name] = 1
+                        continue
 
-                        # Prepare for value prediction of next states
+                    with torch.no_grad():
                         choices = []
                         next_states_to_batch = []
 
+                        current_agent_obj = env.agents[int(agent_name.split('_')[-1])-1]
+                        
                         for action in legal_actions:
-                            # get_next_state must be a method of the agent instance in the environment
-                            # env.agents list is 0-indexed, player_1 is agent 0
-                            agent_idx = int(agent_name.split('_')[-1]) - 1 
-                            next_state_obs = env.agents[agent_idx].get_next_state(action)
+                            next_state_obs = current_agent_obj.get_next_state(action)
                             next_states_to_batch.append(next_state_obs)
 
-                        if len(next_states_to_batch) == 0: # Handle cases with no valid next states
-                            actions[agent_name] = 0 # Default to Pass
-                            # print(f"Warning: No valid next states for {agent_name}, defaulting to Pass.")
+                        if not next_states_to_batch:
+                            actions[agent_name] = 0
                             continue
 
                         batched_next_states_np = np.stack(next_states_to_batch)
+                        
                         tensor = torch.from_numpy(batched_next_states_np).float()
-
                         with torch.no_grad():
                             values_tensor = model(tensor)
 
                         for i, action in enumerate(legal_actions):
                             value = values_tensor[i].item() 
-                            choices.append((action, value)) # Only need action and value for selection
+                            choices.append((action, next_states_to_batch[i], value))
 
-                        epsilon = self.config['epsilon'] # Use epsilon from config
-                        
-                        # Epsilon-greedy action selection
-                        if random.random() < epsilon:
-                            my_action = random.choice([c[0] for c in choices]) # Randomly pick an action
-                        else:
-                            # Select action with max value (break ties randomly)
-                            random.shuffle(choices) # Shuffle to break ties randomly
-                            max_value = -float('inf')
-                            my_action = None
-                            for action, value in choices:
-                                if value > max_value: # Strict greater than ensures max_value is updated
-                                    my_action = action
-                                    max_value = value
-                        
-                        actions[agent_name] = my_action
+
+                    epsilon = 0.05
+                    if random.random() < epsilon:
+                        my_action, expected_state, value = random.choice(choices)
                     else:
-                        # Fallback for other agents if they weren't explicitly 'random' or 'player_1' logic
-                        # This should ideally be covered by the initial 'models' dict
-                        print(f"Warning: Unhandled agent type for {agent_name}, defaulting to Pass.")
-                        actions[agent_name] = 0 # Default to Pass
+                        random.shuffle(choices)
+                        max_value = -float('inf')
+                        for action, next_state, value_item in choices:
+                            if max_value < value_item:
+                                my_action = action
+                                expected_state = next_state
+                                max_value = value_item
+
+                    actions[agent_name] = my_action
+                    agent_data['action'].append(actions[agent_name])
                 
                 next_obs, rewards, done = env.step(actions)
-                
                 for agent_name in rewards:
                     total_rewards[agent_name] += rewards[agent_name]
-                    episode_rewards[agent_name] += rewards[agent_name] # Accumulate for current episode print
-                
                 obs = next_obs
             
-            # Print episode summary
-            win_rate = total_rewards['player_1'] / (episode_idx + 1)
-            # Use self.pid for process-specific logging
-            print(f'Process {self.pid} | Episode {episode_idx + 1} | Player 1 Reward: {episode_rewards["player_1"]:.2f} | Total Player 1 Reward: {total_rewards["player_1"]:.2f} | Win Rate: {win_rate:.2f}', flush=True)
+            print('Episode', episode, end=' ', flush=True)
+            for k in total_rewards:
+                v = total_rewards[k] / episode
+                print(f"{v:.2f}", end=' ', flush=True)
+            print(flush=True)
 
-        # After all episodes are done for this process, put results into the queue
         self.result_queue.put(total_rewards)
-        print(f"Process {self.pid} finished and put results in queue.", flush=True)
 
 
 if __name__ == '__main__':
-    # Initial setup for main process
-    base_seed = int(time.time())
-    set_all_seeds(base_seed)
-    print(f"Main process seed: {base_seed}")
+    seed = int(time.time())
+    set_all_seeds(seed)
+    print(f"Seed: {seed}")
 
-    num_testers = 4 # Number of parallel Tester processes
-    episodes_per_tester = 1000 # Each tester will run this many episodes
-    
-    main_config = {
-        'episodes_per_tester': episodes_per_tester, # Each Tester runs this many episodes
-        'policies': ['expe/06261520/models/model_48000.pt', 'random', 'random', 'random'],
-        'epsilon': 0.05, # Epsilon for e-greedy in Tester
-        'base_seed': base_seed # Pass base_seed for unique seed generation in subprocesses
+    num_testers = 4
+
+    config = {
+        'episodes': 250,
+        'policies': ['expe/06261616/models/model_11000.pt', 'random', 'random', 'random']
     }
     
-    results_queue = Queue() # Queue to collect results from Tester processes
-    
+    results_queue = Queue()
+
     testers = []
     for i in range(num_testers):
-        tester = Tester(main_config, results_queue)
+        tester = Tester(config, results_queue)
         testers.append(tester)
-        tester.start() # Start each Tester process
+        tester.start()
 
-    # Wait for all Tester processes to complete
     for tester in testers:
         tester.join()
 
-    # Collect results from the queue
-    final_total_rewards = {
-        'player_0': 0, 'player_1': 0, 'player_2': 0, 'player_3': 0 # Assuming these are env.agent_names
-    } 
-    # Initialize with actual agent names from env if possible, or use 'player_1' etc.
-    # For simplicity, using generic player names. You might want to get them from env
-    # Example: env = MahjongGBEnv(config={'agent_clz': FeatureAgent}); final_total_rewards = {name: 0 for name in env.agent_names}
-
-    total_episodes_run = num_testers * episodes_per_tester
+    dummy_env = MahjongGBEnv(config={'agent_clz': FeatureAgent})
+    final_total_rewards = {agent_name: 0 for agent_name in dummy_env.agent_names}
+    
+    total_episodes_evaluated = num_testers * config['episodes']
 
     while not results_queue.empty():
         tester_rewards = results_queue.get()
         for agent_name, reward in tester_rewards.items():
-            # Adjusting agent_name for generic aggregation if necessary
-            # Assuming agent_name is 'player_1', 'player_2' etc. already
             if agent_name in final_total_rewards:
                 final_total_rewards[agent_name] += reward
-            else: # If agent_name not pre-initialized, add it
+            else:
                 final_total_rewards[agent_name] = reward
 
-
     print("\n--- All Tester Processes Finished ---")
-    print(f"Total Episodes Run Across All Testers: {total_episodes_run}")
-    print("Aggregated Total Rewards:")
-    for agent_name, reward in final_total_rewards.items():
-        if 'player_1' in agent_name: # Assuming player_1 is the one you track win rate for
-            aggregated_win_rate = reward / total_episodes_run
-            print(f"- {agent_name}: {reward:.2f} (Aggregated Win Rate: {aggregated_win_rate:.2f})")
-        else:
-            print(f"- {agent_name}: {reward:.2f}")
+    print(f"Total episodes evaluated across all testers: {total_episodes_evaluated}")
+    print("Aggregated Average Rewards:")
+    for agent_name, total_reward_sum in final_total_rewards.items():
+        overall_avg_reward = total_reward_sum / total_episodes_evaluated
+        print(f"- {agent_name}: {overall_avg_reward:.2f}")

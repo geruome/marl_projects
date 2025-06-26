@@ -32,7 +32,7 @@ if __name__ == '__main__':
         'total_iters': 50000,
         'ckpt_save_interval': 1000,
         'seed': seed,
-        'pretrained_weights': 'expe/06261616/models/model_11000.pt',
+        'pretrained_weights': None, # 'expe/06261616/models/model_11000.pt',
     }
     
     replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'], config['max_sample_count'])

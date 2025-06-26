@@ -2,8 +2,6 @@ from multiprocessing import Process
 import numpy as np
 import torch
 
-from replay_buffer import ReplayBuffer
-from model_pool import ModelPoolClient
 from env import MahjongGBEnv
 from feature import FeatureAgent
 from model import MyModel
@@ -11,6 +9,7 @@ import random
 from pdb import set_trace as stx
 from utils import set_all_seeds
 import time
+from tqdm import tqdm
 
 
 class Tester(): # 指定预训练模型/纯随机。
@@ -41,7 +40,7 @@ class Tester(): # 指定预训练模型/纯随机。
         for agent_name in env.agent_names:
             total_rewards[agent_name] = 0
 
-        for episode in range(self.config['episodes']):
+        for episode in tqdm(range(1, self.config['episodes'] + 1)):
             # run one episode and collect data
             obs = env.reset()
             episode_data = {agent_name: {
@@ -61,7 +60,7 @@ class Tester(): # 指定预训练模型/纯随机。
                 expected_state = None
                 assert len(obs) in [1,3]
                 for agent_name in obs:
-                    if agent_name != 'player_1': # 只训player1, 其他全pass
+                    if models[agent_name] == 'random':
                         arr = obs[agent_name]['action_mask']
                         if arr[0] == 1: # Pass
                             actions[agent_name] = 0
@@ -103,7 +102,7 @@ class Tester(): # 指定预训练模型/纯随机。
                             choices.append((action, next_states_to_batch[i], value))
 
 
-                    epsilon = 0.0
+                    epsilon = 0.00
                     # e-greedy
                     if random.random() < epsilon:
                         my_action, expected_state, value = random.choice(choices)
@@ -126,8 +125,11 @@ class Tester(): # 指定预训练模型/纯随机。
             # print('----------', rewards); exit(0)
             # if not all(value == 0 for value in rewards.values()):
             #     hu_episode += 1
-            win_rate = total_rewards['player_1'] / (episode + 1)
-            print('Episode', episode + 1, 'Total_rewards', total_rewards['player_1'], "Win rate", f"{win_rate:.2f}", flush=True)
+            print('Episode', episode, end=' ')
+            for k in total_rewards:
+                v = total_rewards[k] / episode
+                print(f"{v:.2f}", end=' ')
+            print(flush=True)
 
         # print(total_rewards)
 
@@ -140,6 +142,6 @@ if __name__ == '__main__':
 
     config = {
         'episodes': 1000,
-        'policies': ['expe/06261520/models/model_48000.pt', 'random', 'random', 'random']
+        'policies': ['pretrained_weights/06261616_11000_0.66.pt', 'random', 'random', 'random']
     }
     tester = Tester(config)
