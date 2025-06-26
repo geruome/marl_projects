@@ -100,6 +100,8 @@ class ReplayBuffer:
                 res[key] = self._pack(values)
             return res
         elif type(data[0]) == np.ndarray:
+            # for d in data:
+            #     print(d.shape)
             return np.stack(data)
         else:
             return np.array(data)

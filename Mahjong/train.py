@@ -17,9 +17,9 @@ if __name__ == '__main__':
         'max_sample_count': 8, 
         'model_pool_size': 4, # ? 1就够吧
         'model_pool_name': 'model-pool',
-        'num_actors': 8,
+        'num_actors': 12,
         'episodes_per_actor': 5000,
-        'gamma': 0.98,
+        'gamma': 0.99,
         'lambda': 0.95,
         'min_sample': 512, # 
         'batch_size': 128,
@@ -30,7 +30,7 @@ if __name__ == '__main__':
         'entropy_coeff': 0.01, # 还可以手动(e-greedy)鼓励探索。
         'device': 'cuda',
         'total_iters': 50000,
-        'ckpt_save_interval': 500,
+        'ckpt_save_interval': 1000,
         'seed': seed,
     }
     

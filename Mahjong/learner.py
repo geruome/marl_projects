@@ -48,35 +48,18 @@ class Learner(Process): #
                 time.sleep(1)
             # sample batch
             batch = self.replay_buffer.sample(self.config['batch_size'])
-            obs = torch.tensor(batch['state']['observation']).to(device)
-            mask = torch.tensor(batch['state']['action_mask']).to(device)
-            states = {
-                'observation': obs,
-                'action_mask': mask
-            }
-            actions = torch.tensor(batch['action']).unsqueeze(-1).to(device)
-            advs = torch.tensor(batch['adv']).to(device)
-            targets = torch.tensor(batch['target']).to(device)
-            
+            states = torch.tensor(batch['states']).to(device)
+            td_targets = torch.tensor(batch['td_targets']).to(device)
+
             print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
             
-            # calculate PPO loss
             model.train(True) # Batch Norm training mode
-            old_logits, _ = model(states)
-            old_probs = F.softmax(old_logits, dim = 1).gather(1, actions)
-            old_log_probs = torch.log(old_probs + 1e-8).detach()
             for _ in range(self.config['epochs']):
-                logits, values = model(states)
-                action_dist = torch.distributions.Categorical(logits = logits)
-                probs = F.softmax(logits, dim = 1).gather(1, actions)
-                log_probs = torch.log(probs + 1e-8)
-                ratio = torch.exp(log_probs - old_log_probs)
-                surr1 = ratio * advs
-                surr2 = torch.clamp(ratio, 1 - self.config['clip'], 1 + self.config['clip']) * advs
-                policy_loss = -torch.mean(torch.min(surr1, surr2))
-                value_loss = torch.mean(F.mse_loss(values.squeeze(-1), targets))
-                entropy_loss = -torch.mean(action_dist.entropy())
-                loss = policy_loss + self.config['value_coeff'] * value_loss + self.config['entropy_coeff'] * entropy_loss
+                values = model(states)
+                td_targets = td_targets.view_as(values)
+
+                loss = F.mse_loss(values, td_targets)
+
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -88,6 +71,6 @@ class Learner(Process): #
             
             # save checkpoints
             if iterations % self.config['ckpt_save_interval'] == 0:
-                path = os.path.join(self.expr_dir, 'models', f'model_{iterations}.pt')
+                path = os.path.join(self.expr_dir, 'models', f'model_{iterations:05d}.pt')
                 torch.save(model.state_dict(), path)
 

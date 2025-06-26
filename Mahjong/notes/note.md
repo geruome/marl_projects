@@ -30,9 +30,10 @@ reward：番数(不胡牌没番，怎么办) + 胡牌快慢
 中间reward如何添加 ?? 中间给小,最后给最大的。
 
 <!-- seed无效 -->
-加速cuda.
-235个动作直接作为输出不太对。起码要知道curtile吧。
+<!-- 加速cuda. -->
 
+多进程加快 tester
+一个报错了, 主程序也报错 ??
 
 ##
 nohup python train.py > output.log 2>&1 &

@@ -45,106 +45,94 @@ class MyModel(nn.Module):
     def __init__(self):
         super(MyModel, self).__init__()
 
-        # --- 序数牌处理模块 (共享权重) ---
-        # 输入形状: (Batch_size, 2, 9) -- 2通道 (手牌/pack), 9列 (牌值1-9)
-        # 我们将对万、条、饼分别传入这个模块
-        self.num_suit_conv_block = nn.Sequential(
-            nn.Conv1d(2, 32, kernel_size=3, padding=1, bias=False), # 2D输入会被处理为1D
+        # --- Shared Convolutional Block for All 6 Suit Rows (Man, Pin, Sou: Hand/Pack) ---
+        # Input to this block will be (Batch_size * 6, 1, 9)
+        # It processes each 1x9 row independently, leveraging shared weights.
+        self.suit_conv_block = nn.Sequential(
+            nn.Conv1d(1, 32, kernel_size=3, padding=1, bias=False), 
             nn.ReLU(True),
             nn.Conv1d(32, 64, kernel_size=3, padding=1, bias=False),
             nn.ReLU(True),
-            nn.Conv1d(64, 32, kernel_size=3, padding=1, bias=False),
+            nn.Conv1d(64, 32, kernel_size=3, padding=1, bias=False), 
             nn.ReLU(True),
-            nn.Flatten() # 展平输出，例如 32 * 9 = 288
+            # Global Average Pooling to reduce the 9-length dimension to 1
+            nn.AdaptiveAvgPool1d(1), 
+            nn.Flatten() # Flattens to (Batch_size * 6, 32)
         )
         
-        # --- 字牌处理模块 (独立于序数牌，通常用MLP或不同Conv) ---
-        # 输入形状: (Batch_size, 2, 9) -- 2通道 (手牌/pack), 9列 (字牌)
-        # 考虑到字牌没有连续性，可以直接使用Conv1d，但也可以考虑MLP
-        # 这里仍用Conv1d，但其捕获的是各字牌的独立状态组合
-        self.honor_suit_conv_block = nn.Sequential(
-            nn.Conv1d(2, 16, kernel_size=1, padding=0, bias=False), # kernel_size=1 相当于对每列独立处理
+        # --- MLP Block for 7-column Honor Tiles ---
+        # Input to this MLP will be (Batch_size * 2, 7)
+        # Each of the 7-feature vectors (for hand or pack) will be mapped to 32 features independently.
+        self.honor_mlp_block = nn.Sequential(
+            nn.Linear(7, 32), # Input 7 features, directly map to 32 features
             nn.ReLU(True),
-            nn.Conv1d(16, 32, kernel_size=1, padding=0, bias=False),
-            nn.ReLU(True),
-            nn.Flatten() # 例如 32 * 9 = 288
-        )
-
-        # --- 特征融合与决策层 ---
-        # 序数牌输出: 3 * (32 * 9) = 3 * 288 = 864
-        # 字牌输出: 32 * 9 = 288
-        # 总融合特征维度 = 864 + 288 = 1152
-        
-        self.fc_common = nn.Sequential(
-            nn.Linear(3 * (32 * 9) + (32 * 9), 512), # 3个序数牌花色 + 1个字牌花色
-            nn.ReLU(True),
-            nn.Linear(512, 256),
+            nn.Linear(32, 32), # Optional: Add another layer if needed for complexity
             nn.ReLU(True)
         )
 
-        # --- Actor 策略头 (输出 Logits) ---
-        self._logits = nn.Sequential(
-            nn.Linear(256, 256),
+        # --- Final Feature Fusion and Value Prediction Head ---
+        # Output from suit_conv_block: (Batch_size, 6 * 32) = (Batch_size, 192)
+        # Output from honor_mlp_block: (Batch_size, 2, 32) -> after flatten for concat: (Batch_size, 2 * 32) = (Batch_size, 64)
+        # Total combined features = 192 + 64 = 256
+        
+        self.value_head = nn.Sequential(
+            nn.Linear(6 * 32 + 2 * 32, 128), # Total 256 features
             nn.ReLU(True),
-            nn.Linear(256, 235) # 动作空间大小
+            nn.Linear(128, 64),
+            nn.ReLU(True),
+            nn.Linear(64, 1) # Single value output
         )
         
-        # --- Critic 价值头 (输出 Value) ---
-        self._value_branch = nn.Sequential(
-            nn.Linear(256, 256),
-            nn.ReLU(True),
-            nn.Linear(256, 1) # 单个价值输出
-        )
-        
-        # --- 权重初始化 ---
+        # --- Weight Initialization ---
         for m in self.modules():
             if isinstance(m, (nn.Conv1d, nn.Linear)):
                 nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, input_dict):
-        obs = input_dict["observation"].float() # obs 形状为 (Batch_size, 8, 9)
+    def forward(self, tensor: torch.tensor):
+        obs = tensor.float() # obs shape: (Batch_size, 8, 9)
 
-        # 分割 obs 为不同花色的输入
-        # 序数牌输入 (万, 条, 饼)
-        num_suit_inputs = [
-            obs[:, 0:2, :], # 万 (行 0, 1)
-            obs[:, 2:4, :], # 条 (行 2, 3)
-            obs[:, 4:6, :]  # 饼 (行 4, 5)
-        ]
+        # --- Process 6 Suit Rows (Man, Pin, Sou: Hand/Pack) ---
+        suit_inputs = obs[:, 0:6, :] # (Batch_size, 6, 9)
+
+        # Reshape for Conv1d: (Batch_size * 6, 1, 9)
+        reshaped_suit_inputs = suit_inputs.reshape(-1, 1, 9) 
+
+        # Process through shared Conv1d block with Global Average Pooling
+        suit_features_per_row = self.suit_conv_block(reshaped_suit_inputs) # (Batch_size * 6, 32)
+
+        # Reshape back to (Batch_size, 6 * 32) for concatenation
+        combined_suit_features = suit_features_per_row.view(obs.shape[0], -1) # (Batch_size, 192)
         
-        # 字牌输入 (风+箭)
-        honor_suit_input = obs[:, 6:8, :] # 风+箭 (行 6, 7)
+        # --- Process 2 Honor Rows (Hand/Pack) ---
+        honor_inputs = obs[:, 6:8, :] # (Batch_size, 2, 9)
 
-        # 处理序数牌 (共享权重)
-        num_suit_features = []
-        for i in range(3): # 遍历万、条、饼
-            # Conv1d 期待 (Batch, Channels, Length)
-            feature = self.num_suit_conv_block(num_suit_inputs[i])
-            num_suit_features.append(feature)
+        # Discard the last 2 columns, resulting in (Batch_size, 2, 7)
+        honor_trimmed = honor_inputs[:, :, :7] 
+
+        # Reshape for MLP: (Batch_size * 2, 7) to apply MLP to each (hand/pack) row independently
+        reshaped_honor_input = honor_trimmed.reshape(-1, 7) 
         
-        # 处理字牌
-        honor_suit_feature = self.honor_suit_conv_block(honor_suit_input)
-
-        # 拼接所有特征
-        combined_features = torch.cat(num_suit_features + [honor_suit_feature], dim=1)
+        # Process through MLP
+        honor_feature_per_row = self.honor_mlp_block(reshaped_honor_input) # (Batch_size * 2, 32)
         
-        # 融合特征并通过全连接层
-        hidden = self.fc_common(combined_features)
+        # Reshape back to (Batch_size, 2, 32) and then flatten the 2 and 32 dimensions for concatenation
+        combined_honor_features = honor_feature_per_row.view(obs.shape[0], -1) # (Batch_size, 2 * 32 = 64)
+        
+        # --- Concatenate all features ---
+        combined_all_features = torch.cat([combined_suit_features, combined_honor_features], dim=1)
+        
+        # --- Predict Value ---
+        value = self.value_head(combined_all_features)
 
-        # 策略头和价值头
-        logits = self._logits(hidden)
-        value = self._value_branch(hidden)
-
-        # 应用 action_mask
-        mask = input_dict["action_mask"].float()
-        # clamp log(0) to a very small number instead of -inf
-        inf_mask = torch.clamp(torch.log(mask), -1e38, 1e38) 
-        masked_logits = logits + inf_mask
-
-        return masked_logits, value
+        # Return only value
+        return value
     
 
-# class MyModel(nn.Module):
-    
+if __name__ == '__main__':
+    model = MyModel()
+    B = 11
+    x = torch.rand(B, 8, 9)
+    y = model(x)
+    print(y.shape)

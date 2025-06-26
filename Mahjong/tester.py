@@ -13,7 +13,7 @@ from utils import set_all_seeds
 import time
 
 
-class Tester4(): # 4人, 指定预训练模型/纯随机。
+class Tester(): # 指定预训练模型/纯随机。
     def __init__(self, config):
         self.config = config
         self.run()
@@ -42,7 +42,7 @@ class Tester4(): # 4人, 指定预训练模型/纯随机。
             total_rewards[agent_name] = 0
 
         for episode in range(self.config['episodes']):
-        # while episode < self.config['episodes']:            
+            # run one episode and collect data
             obs = env.reset()
             episode_data = {agent_name: {
                 'state' : {
@@ -50,7 +50,7 @@ class Tester4(): # 4人, 指定预训练模型/纯随机。
                     'action_mask': []
                 },
                 'action' : [],
-                'reward' : [],
+                'reward' : [], # 初始obs的reward
                 'value' : []
             } for agent_name in env.agent_names}
             done = False
@@ -58,47 +58,78 @@ class Tester4(): # 4人, 指定预训练模型/纯随机。
                 # each player take action
                 actions = {}
                 values = {}
+                expected_state = None
                 assert len(obs) in [1,3]
                 for agent_name in obs:
-                    if models[agent_name] == 'random':
+                    if agent_name != 'player_1': # 只训player1, 其他全pass
                         arr = obs[agent_name]['action_mask']
+                        if arr[0] == 1: # Pass
+                            actions[agent_name] = 0
+                            continue
                         indices = np.where(arr == 1)[0]
                         assert indices.size > 0
                         action = random.choice(indices).item()
                         actions[agent_name] = action
-                    else:
-                        agent_data = episode_data[agent_name]
-                        state = obs[agent_name]
-                        agent_data['state']['observation'].append(state['observation'])
-                        agent_data['state']['action_mask'].append(state['action_mask'])
-                        state['observation'] = torch.tensor(state['observation'], dtype = torch.float).unsqueeze(0)
-                        state['action_mask'] = torch.tensor(state['action_mask'], dtype = torch.float).unsqueeze(0)
-                        model.train(False) # Batch Norm inference mode
+                        continue
+
+                    agent_data = episode_data[agent_name]
+                    state = obs[agent_name]
+                    agent_data['state']['observation'].append(state['observation'])
+                    state['observation'] = torch.tensor(state['observation'], dtype = torch.float).unsqueeze(0)
+                    model.train(False) # Batch Norm inference mode
+
+                    legal_actions = np.where(state['action_mask'] == 1)[0]
+                    if 1 in legal_actions: # 能胡必胡
+                        # 不纯e-greedy, 多 吃/碰/杠
+                        actions[agent_name] = 1
+                        continue
+
+                    with torch.no_grad():
+                        choices = []
+                        next_states_to_batch = []
+
+                        for action in legal_actions:
+                            next_state_obs = env.agents[int(agent_name[-1])-1].get_next_state(action)
+                            next_states_to_batch.append(next_state_obs)
+
+                        batched_next_states_np = np.stack(next_states_to_batch)
+                            
+                        tensor = torch.from_numpy(batched_next_states_np).float()
                         with torch.no_grad():
-                            logits, value = model(state)
-                            action_dist = torch.distributions.Categorical(logits = logits)
-                            action = action_dist.sample().item()
-                            # print(action_dist)
-                            value = value.item()
-                        actions[agent_name] = action
-                        values[agent_name] = value
-                        agent_data['action'].append(actions[agent_name])
-                        agent_data['value'].append(values[agent_name])
+                            values_tensor = model(tensor)
+
+                        for i, action in enumerate(legal_actions):
+                            value = values_tensor[i].item() 
+                            choices.append((action, next_states_to_batch[i], value))
+
+
+                    epsilon = 0.05
+                    # e-greedy
+                    if random.random() < epsilon:
+                        my_action, expected_state, value = random.choice(choices)
+                    else:
+                        random.shuffle(choices)
+                        max_value = -float('inf')
+                        for action, next_state, value in choices:
+                            if max_value < value:
+                                my_action = action
+                                expected_state = next_state
+                                max_value = value
+
+                    actions[agent_name] = my_action
+                    agent_data['action'].append(actions[agent_name])
                 # interact with env
                 next_obs, rewards, done = env.step(actions)
                 for agent_name in rewards:
-                    episode_data[agent_name]['reward'].append(rewards[agent_name])
                     total_rewards[agent_name] += rewards[agent_name]
-
                 obs = next_obs
-            
             # print('----------', rewards); exit(0)
             # if not all(value == 0 for value in rewards.values()):
             #     hu_episode += 1
-            print('Episode', episode, 'Reward', rewards, 'Total_rewards', total_rewards, flush=True)
-            stx()
+            win_rate = total_rewards['player_1'] / (episode + 1)
+            print('Episode', episode + 1, 'Total_rewards', total_rewards['player_1'], "Win rate", f"{win_rate:.2f}", flush=True)
 
-        print(total_rewards)
+        # print(total_rewards)
 
 
 if __name__ == '__main__':
@@ -109,6 +140,6 @@ if __name__ == '__main__':
 
     config = {
         'episodes': 1000,
-        'policies': ['random', 'random', 'random', 'random']
+        'policies': ['expe/06260130/models/model_37500.pt', 'random', 'random', 'random']
     }
-    tester = Tester4(config)
+    tester = Tester(config)

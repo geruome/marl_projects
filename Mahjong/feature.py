@@ -2,6 +2,7 @@ from agent import MahjongGBAgent
 from collections import defaultdict
 import numpy as np
 from pdb import set_trace as stx
+import copy 
 
 try:
     from MahjongGB import MahjongFanCalculator
@@ -15,7 +16,7 @@ class FeatureAgent(MahjongGBAgent):
     observation: 6*4*9
         (men+quan+hand4)*4*9  ??
     action_mask: 235
-        pass1+hu1+discard34+chi63(3*7*3)+peng34+gang34+angang34+bugang34
+        pass1+hu1+discard34+chi63(3*7)+peng34+gang34+angang34+bugang34
     '''
     
     ACT_SIZE = 235
@@ -166,6 +167,7 @@ class FeatureAgent(MahjongGBAgent):
                 self.valid.append(self.OFFSET_ACT['Pass'])
                 return self._obs()
         if t[2] == 'Chi':
+            # print(t, '-----------')
             tile = t[3] # [WTB 2-8]
             color = tile[0]
             num = int(tile[1])
@@ -263,16 +265,6 @@ class FeatureAgent(MahjongGBAgent):
                 return self._obs()
         raise NotImplementedError('Unknown request %s!' % request)
     
-    '''
-    Pass
-    Hu
-    Play XX
-    Chi XX
-    Peng
-    Gang
-    (An)Gang XX
-    BuGang XX
-    '''
     def action2response(self, action):
         if action < self.OFFSET_ACT['Hu']:
             return 'Pass'
@@ -291,22 +283,13 @@ class FeatureAgent(MahjongGBAgent):
             return 'Gang ' + self.TILE_LIST[action - self.OFFSET_ACT['AnGang']]
         return 'BuGang ' + self.TILE_LIST[action - self.OFFSET_ACT['BuGang']]
     
-    '''
-    Pass
-    Hu
-    Play XX
-    Chi XX
-    Peng
-    Gang
-    (An)Gang XX
-    BuGang XX
-    '''
     def response2action(self, response):
         t = response.split()
         if t[0] == 'Pass': return self.OFFSET_ACT['Pass']
         if t[0] == 'Hu': return self.OFFSET_ACT['Hu']
         if t[0] == 'Play': return self.OFFSET_ACT['Play'] + self.OFFSET_TILE[t[1]]
-        if t[0] == 'Chi': return self.OFFSET_ACT['Chi'] + 'WTB'.index(t[1][0]) * 7 * 3 + (int(t[2][1]) - 2) * 3 + int(t[1][1]) - int(t[2][1]) + 1
+        # if t[0] == 'Chi': return self.OFFSET_ACT['Chi'] + 'WTB'.index(t[1][0]) * 7 * 3 + (int(t[2][1]) - 2) * 3 + int(t[1][1]) - int(t[2][1]) + 1
+        if t[0] == 'Chi': return self.OFFSET_ACT['Chi'] + 'WTB'.index(t[1][0]) * 21 + (int(t[1][1]) - 2) * 3
         if t[0] == 'Peng': return self.OFFSET_ACT['Peng'] + self.OFFSET_TILE[t[1]]
         if t[0] == 'Gang': return self.OFFSET_ACT['Gang'] + self.OFFSET_TILE[t[1]]
         if t[0] == 'AnGang': return self.OFFSET_ACT['AnGang'] + self.OFFSET_TILE[t[1]]
@@ -322,25 +305,117 @@ class FeatureAgent(MahjongGBAgent):
             'action_mask': mask
         }
     
-    def _hand_embedding_update(self): # here
-        self.obs = np.zeros((8, 9), dtype=np.uint8)
-        for tile in self.hand: # WTBFJ
+    def get_embedding(self, hand, pack):
+        obs = np.zeros((8, 9), dtype=np.uint8)
+        for tile in hand: # WTBFJ
             x, y = self.obs_pos[tile]
-            self.obs[x][y] += 1
-        for pack in self.packs[0]:
+            obs[x][y] += 1
+        for pack in pack:
             op, tile, offset = pack
             if op == 'CHI':
                 for i in range(-1, 2):
                     ti = tile[0] + str(int(tile[1])+i)
                     x, y = self.obs_pos[ti]
-                    self.obs[x+1][y] += 1
+                    obs[x+1][y] += 1
             elif op == 'PENG' or op == 'GANG':
                 num = 3 if op == 'PENG' else 4
                 x, y = self.obs_pos[tile]
-                self.obs[x][y] += num
+                obs[x+1][y] += num
             else:
                 raise NotImplementedError
-        # print(self.obs, np.sum(self.obs))
+        return obs
+
+    def _hand_embedding_update(self): # here
+        self.obs = self.get_embedding(self.hand, self.packs[0])
+        
+    def get_next_state(self, action):
+        sim_hand = copy.deepcopy(self.hand)
+        sim_packs_self = copy.deepcopy(self.packs[0]) 
+
+        action_type = None
+        action_tile_str = None 
+        
+        if action < self.OFFSET_ACT['Hu']: # Pass
+            action_type = 'Pass'
+            # No changes to hand or packs for a Pass action.
+        elif action < self.OFFSET_ACT['Play']: # Hu
+            action_type = 'Hu'
+            if self.curTile: # If it's a Hu on another's discard
+                 sim_hand.append(self.curTile) # Temporarily add for embedding calculation
+            # No tiles removed for Hu, it's a terminal state transition.
+        elif action < self.OFFSET_ACT['Chi']: # Play
+            action_type = 'Play'
+            action_tile_str = self.TILE_LIST[action - self.OFFSET_ACT['Play']]
+            if action_tile_str in sim_hand:
+                sim_hand.remove(action_tile_str)
+            else:
+                print(f"Warning: Attempted to play {action_tile_str}, but not in hand: {sim_hand}")
+        elif action < self.OFFSET_ACT['Peng']: # Chi
+            action_type = 'Chi'
+            t = (action - self.OFFSET_ACT['Chi']) // 3
+            color_char = 'WTB'[t // 7]
+            center_tile_num = t % 7 + 2
+        
+            center_tile_str = f"{color_char}{center_tile_num}"
+            chi_tiles_seq = [f"{color_char}{center_tile_num-1}", center_tile_str, f"{color_char}{center_tile_num+1}"]
+            
+            tiles_to_remove_from_hand = [t for t in chi_tiles_seq if t != self.curTile]
+            for t_rem in tiles_to_remove_from_hand:
+                if t_rem in sim_hand:
+                    sim_hand.remove(t_rem)
+                else:
+                    print(f"Warning: Attempted to remove {t_rem} for Chi, but not in hand: {sim_hand}")
+            sim_packs_self.append(('CHI', center_tile_str, self.curTile)) 
+
+        elif action < self.OFFSET_ACT['AnGang']: # Peng or Gang (external from curTile)
+            if action < self.OFFSET_ACT['Gang']: # Peng
+                action_type = 'Peng'
+                action_tile_str = self.TILE_LIST[action - self.OFFSET_ACT['Peng']]
+                for _ in range(2): 
+                    if action_tile_str in sim_hand:
+                        sim_hand.remove(action_tile_str)
+                    else:
+                        print(f"Warning: Attempted to remove {action_tile_str} for Peng, but not enough in hand: {sim_hand}")
+                sim_packs_self.append(('PENG', action_tile_str, self.curTile))
+            else: # Gang (external from curTile)
+                action_type = 'Gang'
+                action_tile_str = self.TILE_LIST[action - self.OFFSET_ACT['Gang']]
+                for _ in range(3): 
+                    if action_tile_str in sim_hand:
+                        sim_hand.remove(action_tile_str)
+                    else:
+                        print(f"Warning: Attempted to remove {action_tile_str} for Gang, but not enough in hand: {sim_hand}")
+                sim_packs_self.append(('GANG', action_tile_str, self.curTile))
+
+        elif action < self.OFFSET_ACT['BuGang']: # AnGang (concealed)
+            action_type = 'AnGang'
+            action_tile_str = self.TILE_LIST[action - self.OFFSET_ACT['AnGang']]
+            for _ in range(4): 
+                if action_tile_str in sim_hand:
+                    sim_hand.remove(action_tile_str)
+                else:
+                    print(f"Warning: Attempted to remove {action_tile_str} for AnGang, but not enough in hand: {sim_hand}")
+            sim_packs_self.append(('GANG', action_tile_str, 'CONCEALED'))
+
+        else: # BuGang (add to existing Peng)
+            action_type = 'BuGang'
+            action_tile_str = self.TILE_LIST[action - self.OFFSET_ACT['BuGang']]
+            if action_tile_str in sim_hand:
+                sim_hand.remove(action_tile_str)
+            else:
+                print(f"Warning: Attempted to remove {action_tile_str} for BuGang, but not in hand: {sim_hand}")
+            found_peng = False
+            for i, (pack_type, tile_val, offer) in enumerate(sim_packs_self):
+                if pack_type == 'PENG' and tile_val == action_tile_str:
+                    sim_packs_self[i] = ('GANG', tile_val, offer)
+                    found_peng = True
+                    break
+            if not found_peng:
+                print(f"Warning: BuGang on {action_tile_str} failed, no existing PENG pack found.")
+            
+        next_obs = self.get_embedding(sim_hand, sim_packs_self)
+
+        return next_obs
     
     def _check_mahjong(self, winTile, isSelfDrawn = False, isAboutKong = False):
         # print('----------------')
@@ -366,3 +441,100 @@ class FeatureAgent(MahjongGBAgent):
         except:
             return False
         return True
+
+
+if __name__ == '__main__':
+    print("--- Running get_next_state Tests ---")
+    
+    agent = FeatureAgent(seatWind=0)
+
+    def print_obs(obs_array, title):
+        print(f"\n--- {title} ---")
+        print("Hand (W,T,B,F,J):")
+        print(obs_array[0:1,:])
+        print(obs_array[2:3,:])
+        print(obs_array[4:5,:])
+        print(obs_array[6:7,:])
+        print("Packs (W,T,B,F,J):")
+        print(obs_array[1:2,:])
+        print(obs_array[3:4,:])
+        print(obs_array[5:6,:])
+        print(obs_array[7:8,:])
+        print("-" * 20)
+
+    # Test 1: Play action
+    agent.hand = ['W1', 'W1', 'W1', 'W2', 'W3', 'W4', 'W5', 'T1', 'T2', 'T3', 'B1', 'B2', 'B3']
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for Play")
+    action_play = agent.response2action('Play W1')
+    next_obs_play = agent.get_next_state(action_play)
+    print_obs(next_obs_play, "Next State after Playing W1")
+
+    # Test 2: Peng action
+    agent.hand = ['W1', 'W1', 'W2', 'W3', 'T1', 'T1', 'T2', 'T3', 'B1', 'B1', 'B2', 'B3']
+    agent.curTile = 'W1'
+    agent.tileFrom = 1
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for Peng")
+    action_peng = agent.response2action('Peng W1')
+    next_obs_peng = agent.get_next_state(action_peng)
+    print_obs(next_obs_peng, "Next State after Peng W1")
+
+    # Test 3: Chi action (W3,W4,W5 from W4 discarded)
+    agent.hand = ['W2', 'W3', 'W5', 'W6', 'T1', 'T2', 'T3', 'B1', 'B2', 'B3', 'F1', 'F2']
+    agent.curTile = 'W4'
+    agent.tileFrom = 3
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for Chi")
+    action_chi = agent.response2action('Chi W4')
+    next_obs_chi = agent.get_next_state(action_chi)
+    print_obs(next_obs_chi, "Next State after Chi W4 (Chi W3,W4,W5 with W4 discarded)")
+    exit(0)
+
+    # Test 4: Gang action (external from discard)
+    agent.hand = ['F1', 'F1', 'F1', 'W1', 'W2', 'W3', 'T1', 'T2', 'T3', 'B1', 'B2', 'B3']
+    agent.curTile = 'F1' # Another player discarded F1
+    agent.tileFrom = 0 # Dummy player index
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for Gang (external)")
+    action_gang_external = agent.response2action('Gang F1')
+    next_obs_gang_external = agent.get_next_state(action_gang_external)
+    print_obs(next_obs_gang_external, "Next State after Gang F1 (external)")
+    # Expected: Three F1 removed from hand, four F1 (GANG) added to packs.
+
+    # Test 5: AnGang action (concealed)
+    agent.hand = ['B1', 'B1', 'B1', 'B1', 'T1', 'T2', 'T3', 'W1', 'W2', 'W3', 'F1', 'F2']
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for AnGang")
+    action_angang = agent.response2action('AnGang B1')
+    next_obs_angang = agent.get_next_state(action_angang)
+    print_obs(next_obs_angang, "Next State after AnGang B1")
+
+    # Test 6: BuGang action (upgrade Peng to Gang)
+    agent.hand = ['T1', 'T2', 'T3', 'W1', 'W2', 'W3', 'F1', 'F2', 'B1']
+    agent.packs[0] = [('PENG', 'B1', 2)]
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for BuGang")
+    action_bugang = agent.response2action('BuGang B1')
+    next_obs_bugang = agent.get_next_state(action_bugang)
+    print_obs(next_obs_bugang, "Next State after BuGang B1")
+
+    # Test 7: Hu action (on discard)
+    agent.hand = ['T1', 'T1', 'T1', 'W1', 'W1', 'W1', 'B1', 'B2', 'B3', 'F1', 'F1', 'F1', 'F2']
+    agent.curTile = 'W2'
+    agent.tileFrom = 2
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for Hu (on discard)")
+    action_hu = agent.response2action('Hu')
+    next_obs_hu = agent.get_next_state(action_hu)
+    print_obs(next_obs_hu, "Next State after Hu on W2")
+
+    # Test 8: Pass action
+    agent.hand = ['W1', 'W2', 'W3', 'T1', 'T2', 'T3', 'B1', 'B2', 'B3', 'F1', 'F2', 'F3', 'F4']
+    agent.curTile = 'W9'
+    agent.tileFrom = 1
+    agent._hand_embedding_update()
+    print_obs(agent.obs, "Initial State for Pass")
+    action_pass = agent.response2action('Pass')
+    next_obs_pass = agent.get_next_state(action_pass)
+    print_obs(next_obs_pass, "Next State after Pass")
