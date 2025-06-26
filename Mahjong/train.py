@@ -6,8 +6,8 @@ import time
 
 
 if __name__ == '__main__':
-    seed = int(time.time())
-    # seed = 1750845888
+    # seed = int(time.time())
+    seed = 1750872601
 
     set_all_seeds(seed)
 
@@ -15,7 +15,7 @@ if __name__ == '__main__':
         'replay_buffer_size': 5000, # 小点,只学习近期数据
         'replay_buffer_episode': 400, # Queue参数. Queue收集episode,unpack给buffer
         'max_sample_count': 8, 
-        'model_pool_size': 4, # ? 1就够吧
+        'model_pool_size': 2, # ? 1就够吧
         'model_pool_name': 'model-pool',
         'num_actors': 12,
         'episodes_per_actor': 5000,
@@ -32,6 +32,7 @@ if __name__ == '__main__':
         'total_iters': 50000,
         'ckpt_save_interval': 1000,
         'seed': seed,
+        'pretrained_weights': 'expe/06261616/models/model_11000.pt',
     }
     
     replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'], config['max_sample_count'])

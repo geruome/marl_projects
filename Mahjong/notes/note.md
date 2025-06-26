@@ -33,7 +33,11 @@ reward：番数(不胡牌没番，怎么办) + 胡牌快慢
 <!-- 加速cuda. -->
 
 多进程加快 tester
-一个报错了, 主程序也报错 ??
+一个actor结束，learner直接报错 ??
+
+模型大一点
+
+改成看番数。
 
 ##
 nohup python train.py > output.log 2>&1 &

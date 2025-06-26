@@ -103,7 +103,7 @@ class Tester(): # 指定预训练模型/纯随机。
                             choices.append((action, next_states_to_batch[i], value))
 
 
-                    epsilon = 0.05
+                    epsilon = 0.0
                     # e-greedy
                     if random.random() < epsilon:
                         my_action, expected_state, value = random.choice(choices)
@@ -140,6 +140,6 @@ if __name__ == '__main__':
 
     config = {
         'episodes': 1000,
-        'policies': ['expe/06260130/models/model_37500.pt', 'random', 'random', 'random']
+        'policies': ['expe/06261520/models/model_48000.pt', 'random', 'random', 'random']
     }
     tester = Tester(config)

@@ -20,6 +20,7 @@ class Actor(Process):
         self.name = config.get('name', 'Actor-?')
         seed = config['seed'] # + int(self.name[-1]) ?? 为什么不同就训不动了
         set_all_seeds(seed)
+        self.reward_buffer = []
         
 
     def run(self):
@@ -41,11 +42,8 @@ class Actor(Process):
         # policies = {player : model for player in env.agent_names} # all four players use the latest model
         
         episode = 0
-        total_try = 0
-        total_rewards = {agent_name: 0 for agent_name in env.agent_names}
         # for episode in range(self.config['episodes_per_actor']):
         while episode < self.config['episodes_per_actor']:
-            total_try += 1
             # update model
             latest = model_pool.get_latest_model()
             if latest['id'] > version['id']:
@@ -145,16 +143,16 @@ class Actor(Process):
                     assert all(value == 0 for value in rewards.values())
                 for agent_name in rewards:
                     episode_data[agent_name]['reward'].append(rewards[agent_name])
-                    total_rewards[agent_name] += rewards[agent_name]
                 obs = next_obs
-            
-            # print('----------', rewards); exit(0)
-            # if all(value == 0 for value in rewards.values()):
+
+            self.reward_buffer.append(max(rewards['player_1'], 0))
+
             if rewards['player_1'] <= 0:
                 continue
             episode += 1
 
-            print(self.name, 'Episode', episode, 'hu_rate', f'{episode/total_try:.2f}', 'Model', latest['id'], 'Reward', rewards['player_1'], flush=True)
+            l = min(1000, len(self.reward_buffer))
+            print(self.name, 'Episode', episode, 'avg_reward', f'{sum(self.reward_buffer[-l:]) / l:.2f}', 'Model', latest['id'], flush=True)
 
             # postprocessing episode data for each agent
             for agent_name, agent_data in episode_data.items():

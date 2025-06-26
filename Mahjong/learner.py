@@ -33,6 +33,10 @@ class Learner(Process): #
         device = torch.device(self.config['device'])
         model = MyModel()
         
+        if self.config['pretrained_weights']:
+            state_dict = torch.load(self.config['pretrained_weights'])
+            model.load_state_dict(state_dict)
+
         # send to model pool
         model_pool.push(model.state_dict()) # push cpu-only tensor to model_pool
         model = model.to(device)
