@@ -66,15 +66,16 @@ class Learner(Process): #
             self.logger.add_scalar('Avg_reward', avg_reward, iterations) # ???卡住
 
             model.train(True) # Batch Norm training mode
-            for _ in range(self.config['epochs']):
-                values = model(states)
-                td_targets = td_targets.view_as(values)
+            values = model(states)
+            td_targets = td_targets.view_as(values)
 
-                loss = F.mse_loss(values, td_targets)
+            loss = F.mse_loss(values, td_targets)
 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            self.logger.add_scalar('Loss', loss.item(), iterations)
 
             # push new model
             model = model.to('cpu')

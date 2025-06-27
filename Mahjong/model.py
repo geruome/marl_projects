@@ -130,45 +130,79 @@ class PolicyModel(nn.Module):
 #         return value
 
 
+# class ColorModel(nn.Module):
+#     def __init__(self, output_dim): # 建模 单花色9张牌(每个0-4)
+#         super(ColorModel, self).__init__()
+#         self.fc1 = nn.Linear(9, 64)
+#         self.relu = nn.ReLU()
+#         self.fc2 = nn.Linear(64, 32)
+#         self.fc3 = nn.Linear(32, output_dim)
+
+#     def forward(self, x):
+#         x = self.fc1(x)
+#         x = self.relu(x)
+#         x = self.fc2(x)
+#         x = self.relu(x)
+#         x = self.fc3(x)
+#         return x
+
+
+# class ColorModel(nn.Module):
+#     def __init__(self, dim): # 建模 单花色9张牌(每个0-4)
+#         super(ColorModel, self).__init__()
+#         self.model = nn.Sequential(
+#             nn.Conv1d(1, dim, kernel_size=3, padding=1, bias=False),
+#             nn.ReLU(True),
+#             nn.Conv1d(dim, dim*2, kernel_size=3, padding=1, bias=False),
+#             nn.ReLU(True),
+#             nn.Conv1d(dim*2, dim, kernel_size=3, padding=1, bias=False),
+#             nn.ReLU(True),
+#             nn.AdaptiveAvgPool1d(1), 
+#             nn.Flatten()
+#         )
+
+#     def forward(self, x):
+#         return self.model(x)
+    
+
 class MyModel(nn.Module):
     def __init__(self):
         super(MyModel, self).__init__()
 
         # --- Shared Convolutional Block for All 6 Suit Rows (Man, Pin, Sou: Hand/Pack) ---
-        # Adjusted channels: (1, 48, 96, 48) - aiming for a balance
+        hidden_dim = 48
+        dim = hidden_dim
+
+        # self.suit_conv_block = nn.Sequential(
+        #     nn.Linear(9, 96), nn.ReLU(True), nn.Linear(96, 96), nn.ReLU(True), nn.Linear(96, hidden_dim)
+        # )
+
         self.suit_conv_block = nn.Sequential(
-            nn.Conv1d(1, 48, kernel_size=3, padding=1, bias=False), # Channels from 64 to 48
+            nn.Conv1d(1, dim, kernel_size=3, padding=1, bias=False),
             nn.ReLU(True),
-            nn.Conv1d(48, 96, kernel_size=3, padding=1, bias=False), # Channels from 128 to 96
+            nn.Conv1d(dim, dim*2, kernel_size=3, padding=1, bias=False),
             nn.ReLU(True),
-            nn.Conv1d(96, 48, kernel_size=3, padding=1, bias=False), # Channels from 64 to 48
+            nn.Conv1d(dim*2, dim, kernel_size=3, padding=1, bias=False),
             nn.ReLU(True),
             nn.AdaptiveAvgPool1d(1), 
             nn.Flatten()
         )
         
-        # --- MLP Block for 7-column Honor Tiles ---
-        # Adjusted width: (7, 48, 48) - keeping 3 layers but reducing width
         self.honor_mlp_block = nn.Sequential(
-            nn.Linear(7, 48), # Output features from 64 to 48
+            nn.Linear(7, hidden_dim),
             nn.ReLU(True),
-            nn.Linear(48, 48), # Maintaining width
+            nn.Linear(hidden_dim, hidden_dim), 
             nn.ReLU(True),
-            nn.Linear(48, 48), # Output features aligned with suit_conv_block's output multiplier
+            nn.Linear(hidden_dim, hidden_dim), 
             nn.ReLU(True)
         )
-
-        # --- Final Feature Fusion and Value Prediction Head ---
-        # Output from suit_conv_block: (Batch_size, 6 * 48) = (Batch_size, 288)
-        # Output from honor_mlp_block: (Batch_size, 2 * 48) = (Batch_size, 96)
-        # Total combined features = 288 + 96 = 384
         
         self.value_head = nn.Sequential(
-            nn.Linear(6 * 48 + 2 * 48, 192), # Input features 384, hidden layer width 192 (from 256)
+            nn.Linear((6+2) * hidden_dim, 192),
             nn.ReLU(True),
-            nn.Linear(192, 96), # Hidden layer width 96 (from 128)
+            nn.Linear(192, 96),
             nn.ReLU(True),
-            nn.Linear(96, 48), # Hidden layer width 48 (from 64)
+            nn.Linear(96, 48),
             nn.ReLU(True),
             nn.Linear(48, 1)
         )
@@ -202,6 +236,7 @@ class MyModel(nn.Module):
 
 if __name__ == '__main__':
     model = MyModel()
+    model.load_state_dict(torch.load('pretrained_weights/0626202920_37000.pt'))
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Params : {num_params}")
     B = 11

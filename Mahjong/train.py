@@ -22,7 +22,7 @@ if __name__ == '__main__':
         'lambda': 0.95,
         'min_sample': 256, # 
         'batch_size': 128,
-        'epochs': 5,
+        'ppo_epochs': 5,
         'clip': 0.2,
         'lr': 1e-3,
         'value_coeff': 1,
@@ -31,10 +31,10 @@ if __name__ == '__main__':
         'total_iters': 100000,
         'ckpt_save_interval': 1000,
         'seed': seed,
-        'pretrained_weights': 'expe/0626205954_great/models/model_39000.pt', 
+        'pretrained_weights': None, # 'expe/0626205954_great/models/model_39000.pt', 
         'max_epsilon': 0.08, 
         'min_epsilon': 0.01,
-        'note': 'reward(fan)=1, >=8',
+        'note': 'reward(fan)=1',
     }
     
     replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'], config['max_sample_count'])
