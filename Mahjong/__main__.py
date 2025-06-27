@@ -62,7 +62,7 @@ def obs2response(agent, model, obs):
 # ----------------------------------------------------
 if __name__ == '__main__':
     model = MyModel()
-    model.load_state_dict(torch.load('data/0626202920_37000.pt', map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load('data/weight.pt', map_location=torch.device('cpu')))
     model.eval()
 
     input()

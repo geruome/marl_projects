@@ -306,7 +306,7 @@ class MahjongGBEnv():
             fanCnt = 0
             for fanPoint, cnt, fanName, fanNameEn in fans:
                 fanCnt += fanPoint * cnt
-            # if fanCnt < 8: raise Error('Not Enough Fans')
+            if fanCnt < 8: raise Error('Not Enough Fans')
             self.obs = {i : self.agents[i].request2obs('Player %d Hu' % player) for i in range(4)}
 
             # if isSelfDrawn:

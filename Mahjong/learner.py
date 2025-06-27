@@ -84,7 +84,7 @@ class Learner(Process): #
             
             # save checkpoints
             if iterations % self.config['ckpt_save_interval'] == 0:
-                path = os.path.join(self.expr_dir, 'models', f'model_{iterations:05d}.pt')
+                path = os.path.join(self.expr_dir, 'models', f'model_{iterations:06d}.pt')
                 torch.save(model.state_dict(), path)
 
         print("End !!")

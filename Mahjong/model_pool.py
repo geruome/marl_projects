@@ -56,7 +56,7 @@ class ModelPoolClient:
         #         n = self.shared_model_list[-1]
         #         break
         #     except Exception as e:
-        #         print(f"Error during loading n: {e}\nretrying...", flush=True)
+        #         print(f"Error during loading n = self.shared_model_list[-1]: {e}\nretrying...", flush=True)
         #         time.sleep(0.1)
         #         retry_cnt += 1
         #         if retry_cnt >= 3:

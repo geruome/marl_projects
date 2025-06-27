@@ -13,8 +13,6 @@ from tqdm import tqdm
 
 
 def obs2action(agent, model, obs):
-    model.train(False)
-
     legal_actions = np.where(obs['action_mask'] == 1)[0]
     assert legal_actions.size
 
@@ -29,7 +27,7 @@ def obs2action(agent, model, obs):
         next_states_obs_list.append(next_state_observation_np)
         choices_for_value_eval.append((action_idx, next_state_observation_np))
 
-    batched_next_states_tensor = torch.from_numpy(np.stack(next_states_obs_list)).float()
+    batched_next_states_tensor = torch.from_numpy(np.stack(next_states_obs_list)).float().cuda()
 
     with torch.no_grad():
         values_tensor = model(batched_next_states_tensor)
@@ -75,6 +73,7 @@ class Tester(): # 指定预训练模型/纯随机。
                 model = MyModel()
                 state_dict = torch.load(policy)
                 model.load_state_dict(state_dict)
+                model = model.to(torch.device('cuda'))
                 model.eval()
                 models[env.agent_names[i]] = model
         
@@ -169,14 +168,14 @@ class Tester(): # 指定预训练模型/纯随机。
             # print('----------', rewards); exit(0)
             # if not all(value == 0 for value in rewards.values()):
             #     hu_episode += 1
-            print('Episode', episode, end=' ')
-            for k in total_rewards:
-                v = total_rewards[k] / episode
-                print(f"{v:.2f}", end=' ')
-            print(flush=True)
+            if episode % 50 == 0:
+                print('Episode', episode, end=' ')
+                for k in total_rewards:
+                    v = total_rewards[k] / episode
+                    print(f"{v:.3f}", end=' ')
+                print(flush=True)
 
-        # print(total_rewards)
-
+        print(total_rewards)
 
 if __name__ == '__main__':
 
@@ -184,9 +183,10 @@ if __name__ == '__main__':
     set_all_seeds(seed)
     print(f"Seed: {seed}")
 
-    path = 'pretrained_weights/0626202920_37000.pt'
+    # path = 'expe/0627170944/models/model_530000.pt'
+    path = 'pretrained_weights/model_468000.pt'
     config = {
-        'episodes': 1000,
+        'episodes': 10000,
         
         'policies': [path, 'random', 'random', 'random', ] # 'random',
     }

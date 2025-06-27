@@ -1,11 +1,7 @@
 ##
 只有 >=8 番才能胡。
-特征提取。单人尽快胡 + 不让对手胡（不点炮）。
-凑番数 + 尽快胡。
 
-自己创建房间比赛。
-小组比赛。
-本地不同agent ???
+要勾选长时运行 + 简单交互 !!
 
 episodes_per_actor = 1000 完之后就结束了。一堆报错不用管。
 
@@ -23,12 +19,6 @@ reward：番数(不胡牌没番，怎么办) + 胡牌快慢
 单独训一个人。
 四人纯随机胡牌率：0.03
 
-状态设计 ???!!!
-四花色独自得出状态，再混合。
-3花色 / 1-9 打乱。
-
-中间reward如何添加 ?? 中间给小,最后给最大的。
-
 <!-- seed无效 -->
 <!-- 加速cuda. -->
 
@@ -39,20 +29,34 @@ Adam VS RMSprop. Adam是对的，而且稳步上升。
 avg_reward：(reward=1)
 expe/0626194320_great/models/model_34000.pt: 0.73
 expe/0626200248/models/model_42000.pt: 0.75
-expe/0626202920/models/model_24000.pt: 0.76
+expe/0626202920/models/model_24000.pt: 0.772
 
+expe/0626205954_great/models/model_39000.pt: 0.72 
 expe/0626205954_great/models/model_39000.pt (>=8): 0.26
+expe/0626205954_great/models/model_39000.pt: 0.73
+
+expe/0627113246/models/model_045000.pt: 0.764
+
+expe/0627113246/models/model_092000.pt: 0.768
+expe/0627124638/models/model_900000.pt: 0.808
+expe/0627124638/models/model_950000.pt: 0.796
+expe/0627170944/models/model_323000.pt: 0.841
+expe/0627170944/models/model_665000.pt: 0.848
 
 负奖励 ?? 自举 ??
 
-0626223307 往后胡的越来越大 ??
+<!-- self.reward[player] = -30 为什么会触发这个 .. -->
+(>=8 fan), 极限是 0.31 (eps=0.05)
 
-self.reward[player] = -30 为什么会触发这个 ..
 
-勾选长时运行 + 简单交互。
+调batch_size
 
-接近胡的时候操作的很对，之前的操作不太对 ??????
-不会杠 ??
+<!-- 接近胡的时候操作的很对，之前的操作不太对 ??????
+不会杠，乱吃，乱打 -->
+
+改成 必须胡牌 >=8 的。
+
+试试policy_model
 
 
 ##

@@ -22,7 +22,8 @@ class ReplayBuffer:
         }
 
         self.queue_reward = Queue(50000)
-        self.reward_buffer = []
+        self.reward_buffer = deque(maxlen=5000)
+        self.current_sum = 0
 
     def push(self, samples):
         self.queue.put(samples)
@@ -32,17 +33,23 @@ class ReplayBuffer:
 
     def avg_reward(self):
         while not self.queue_reward.empty():
-            reward = self.queue_reward.get()
-            self.reward_buffer.append(reward)
-        l = min(5000, len(self.reward_buffer)) # 
-        if l == 0:
+            item = self.queue_reward.get()
+            if len(self.reward_buffer) == self.reward_buffer.maxlen:
+                self.current_sum -= self.reward_buffer[0]
+            self.reward_buffer.append(item)
+            self.current_sum += item
+
+        if len(self.reward_buffer) == 0: 
             return 0
-        return sum(self.reward_buffer[-l:]) / l
+        return self.current_sum / len(self.reward_buffer)
 
     def _flush(self):
         while not self.queue_reward.empty():
-            reward = self.queue_reward.get()
-            self.reward_buffer.append(reward)
+            item = self.queue_reward.get()
+            if len(self.reward_buffer) == self.reward_buffer.maxlen:
+                self.current_sum -= self.reward_buffer[0]
+            self.reward_buffer.append(item)
+            self.current_sum += item
 
         # Filter out old or excessively sampled data
         samples_to_keep = []

@@ -48,11 +48,22 @@ class Actor(Process):
         while episode < self.config['episodes_per_actor']:
             # time.sleep(1)
             # update model
-            latest = model_pool.get_latest_model()
-            if latest['id'] > version['id']:
-                state_dict = model_pool.load_model(latest)
-                model.load_state_dict(state_dict)
-                version = latest
+            retry_cnt = 0
+            while True:
+                try:
+                    latest = model_pool.get_latest_model()
+                    if latest['id'] > version['id']:
+                        state_dict = model_pool.load_model(latest)
+                        model.load_state_dict(state_dict)
+                        version = latest
+                    break
+                except Exception as e:
+                    print(f"Error during loading latest_model: {e}\nretrying...", flush=True)
+                    time.sleep(0.1)
+                    retry_cnt += 1
+                    if retry_cnt >= 3:
+                        assert 0
+
 
             # run one episode and collect data
             obs = env.reset()
