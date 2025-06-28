@@ -184,10 +184,9 @@ if __name__ == '__main__':
     print(f"Seed: {seed}")
 
     # path = 'expe/0627170944/models/model_530000.pt'
-    path = 'pretrained_weights/model_468000.pt'
+    path = 'data/weight.pt'
     config = {
         'episodes': 10000,
-        
         'policies': [path, 'random', 'random', 'random', ] # 'random',
     }
     tester = Tester(config)

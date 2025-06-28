@@ -30,33 +30,33 @@ avg_reward：(reward=1)
 expe/0626194320_great/models/model_34000.pt: 0.73
 expe/0626200248/models/model_42000.pt: 0.75
 expe/0626202920/models/model_24000.pt: 0.772
-
 expe/0626205954_great/models/model_39000.pt: 0.72 
-expe/0626205954_great/models/model_39000.pt (>=8): 0.26
 expe/0626205954_great/models/model_39000.pt: 0.73
-
 expe/0627113246/models/model_045000.pt: 0.764
-
 expe/0627113246/models/model_092000.pt: 0.768
 expe/0627124638/models/model_900000.pt: 0.808
 expe/0627124638/models/model_950000.pt: 0.796
 expe/0627170944/models/model_323000.pt: 0.841
 expe/0627170944/models/model_665000.pt: 0.848
 
-负奖励 ?? 自举 ??
+fan >= 8:
+expe/0627211756/models/model_486000.pt: 0.358
+expe/0627211756/models/model_538000.pt: 0.377
+expe/0628003319/models/model_1842000.pt: 0.393
+expe/0628003319/models/model_3106000.pt: 0.401
 
+<!-- 负奖励 ?? 自举 ?? -->
 <!-- self.reward[player] = -30 为什么会触发这个 .. -->
-(>=8 fan), 极限是 0.31 (eps=0.05)
+<!-- (>=8 fan), 极限是 0.31 (eps=0.05) -->
 
+从0开始训效果更好 ??
 
-调batch_size
-
+<!-- 调batch_size -->
 <!-- 接近胡的时候操作的很对，之前的操作不太对 ??????
 不会杠，乱吃，乱打 -->
 
-改成 必须胡牌 >=8 的。
-
 试试policy_model
+linear reward. 
 
 
 ##

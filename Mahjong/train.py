@@ -17,7 +17,7 @@ if __name__ == '__main__':
         'model_pool_size': 2, # ? 1就够吧
         'model_pool_name': 'model-pool',
         'num_actors': 12,
-        'episodes_per_actor': 200000, # episodes_per_actor * 150? * count * num_actors / B。但实测是 episodes_per_actor * 6.5 = iters
+        'episodes_per_actor': 1000000, # episodes_per_actor * 150? * count * num_actors / B。但实测是 episodes_per_actor * 6.5 = iters
         'gamma': 0.99,
         'lambda': 0.95,
         'min_sample': 256, # 
@@ -28,10 +28,10 @@ if __name__ == '__main__':
         'value_coeff': 1,
         'entropy_coeff': 0.01, # 还可以手动(e-greedy)鼓励探索。
         'device': 'cuda',
-        'total_iters': 1000000,
+        'total_iters': 5000000,
         'ckpt_save_interval': 1000,
         'seed': seed,
-        'pretrained_weights': None, # 'expe/0627124638/models/model_950000.pt', 
+        'pretrained_weights': 'expe/0627211756/models/model_647000.pt',
         'max_epsilon': 0.05, 
         'min_epsilon': 0.05,
         'note': 'reward(fan)=1, >=8',
