@@ -24,6 +24,7 @@ class ReplayBuffer:
         self.queue_reward = Queue(50000)
         self.reward_buffer = deque(maxlen=5000)
         self.current_sum = 0
+        self.current_sum01 = 0
 
     def push(self, samples):
         self.queue.put(samples)
@@ -36,12 +37,15 @@ class ReplayBuffer:
             item = self.queue_reward.get()
             if len(self.reward_buffer) == self.reward_buffer.maxlen:
                 self.current_sum -= self.reward_buffer[0]
+                self.current_sum01 -= (self.reward_buffer[0] > 1e-3)
+
             self.reward_buffer.append(item)
             self.current_sum += item
+            self.current_sum01 += (item > 1e-3)
 
         if len(self.reward_buffer) == 0: 
-            return 0
-        return self.current_sum / len(self.reward_buffer)
+            return 0, 0
+        return (self.current_sum / len(self.reward_buffer), self.current_sum01 / len(self.reward_buffer)) # reward, win_rate
 
     def _flush(self):
         while not self.queue_reward.empty():

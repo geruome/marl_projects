@@ -20,8 +20,8 @@ if __name__ == '__main__':
         'episodes_per_actor': 1000000, # episodes_per_actor * 150? * count * num_actors / B。但实测是 episodes_per_actor * 6.5 = iters
         'gamma': 0.99,
         'lambda': 0.95,
-        'min_sample': 256, # 
-        'batch_size': 128,
+        'min_sample': 128, # 
+        'batch_size': 64,
         'ppo_epochs': 5,
         'clip': 0.2,
         'lr': 1e-3,
@@ -29,12 +29,12 @@ if __name__ == '__main__':
         'entropy_coeff': 0.01, # 还可以手动(e-greedy)鼓励探索。
         'device': 'cuda',
         'total_iters': 5000000,
-        'ckpt_save_interval': 1000,
+        'ckpt_save_interval': 5000,
         'seed': seed,
-        'pretrained_weights': 'expe/0627211756/models/model_647000.pt',
+        'pretrained_weights': None, # 'expe/0627211756/models/model_647000.pt',
         'max_epsilon': 0.05, 
         'min_epsilon': 0.05,
-        'note': 'reward(fan)=1, >=8',
+        'note': 'reward(fan)=1, fan>=8',
     }
     
     replay_buffer = ReplayBuffer(config['replay_buffer_size'], config['replay_buffer_episode'], config['max_sample_count'])

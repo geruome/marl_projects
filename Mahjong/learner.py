@@ -61,9 +61,10 @@ class Learner(Process): #
             td_targets = torch.tensor(batch['td_targets']).to(device)
 
             # print('Iteration %d, replay buffer in %d out %d' % (iterations, self.replay_buffer.stats['sample_in'], self.replay_buffer.stats['sample_out']), flush=True)
-            avg_reward = self.replay_buffer.avg_reward()
+            avg_reward, avg_win_rate = self.replay_buffer.avg_reward()
             # print(f'Iteration {iterations}, avg_reward {avg_reward:.2f}', flush=True)
-            self.logger.add_scalar('Avg_reward', avg_reward, iterations) # ???卡住
+            self.logger.add_scalar('reward', avg_reward, iterations)
+            self.logger.add_scalar('win_rate', avg_win_rate, iterations)
 
             model.train(True) # Batch Norm training mode
             values = model(states)

@@ -154,10 +154,13 @@ class Actor(Process):
                 if not done:
                     assert all(value == 0 for value in rewards.values())
                 for agent_name in rewards:
-                    episode_data[agent_name]['reward'].append(rewards[agent_name])
+                    episode_data[agent_name]['reward'].append(rewards[agent_name]) # here
+                    # rewards[agent_name] / 8, rewards[agent_name] > 0
                 obs = next_obs
 
-            self.replay_buffer.push_reward(max(rewards['player_1'], 0))
+            _reward = max(rewards['player_1'], 0)
+            # _reward = rewards['player_1']
+            self.replay_buffer.push_reward(_reward)
 
             if rewards['player_1'] <= 0:
                 continue
